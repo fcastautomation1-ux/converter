@@ -14,7 +14,6 @@ def extract_applovin_payload(js_content):
 
     payload = js_content[start:end]
 
-    # Decode escaped characters safely
     payload = (
         payload
         .replace('\\"', '"')
@@ -23,28 +22,39 @@ def extract_applovin_payload(js_content):
         .replace("\\t", "\t")
         .replace("\\/", "/")
     )
-
     return payload
 
 def parse_applovin_payload(html_file, js_file=None):
     """
-    Parses AppLovin inputs. If a separate JS loader file is provided, 
-    extracts the playable HTML payload using your original al_renderHtml logic.
-    Otherwise, reads the HTML file directly.
+    Parses AppLovin inputs. Extracts embedded zip assets and returns (html_content, extracted_folder).
     """
+    extracted_folder = None
+    extracted_html = None
+
     if js_file:
         with open(js_file, "r", encoding="utf-8", errors="ignore") as f:
             js_content = f.read()
-        extracted = extract_applovin_payload(js_content)
-        if extracted:
-            return extracted
+        extracted_html = extract_applovin_payload(js_content)
 
-    # Fallback to direct file reading or embedded zip extraction
-    extracted_html = extract_embedded_zip(html_file)
-    if extracted_html:
-        return extracted_html
+    # Always attempt embedded zip extraction on the HTML file to get game assets/folders
+    res = extract_embedded_zip(html_file)
+    if isinstance(res, tuple):
+        extracted_html_res, folder_path = res
+        if extracted_html_res:
+            extracted_html = extracted_html_res
+        if folder_path:
+            extracted_folder = folder_path
+    elif isinstance(res, str) and os.path.isdir(res):
+        extracted_folder = res
+        index_p = os.path.join(res, "index.html")
+        if os.path.exists(index_p):
+            with open(index_p, "r", encoding="utf-8", errors="ignore") as f:
+                extracted_html = f.read()
+    elif isinstance(res, str):
+        extracted_html = res
 
-    with open(html_file, "r", encoding="utf-8", errors="ignore") as f:
-        content = f.read()
+    if not extracted_html:
+        with open(html_file, "r", encoding="utf-8", errors="ignore") as f:
+            extracted_html = f.read()
 
-    return content
+    return extracted_html, extracted_folder

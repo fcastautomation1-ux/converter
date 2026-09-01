@@ -31,7 +31,16 @@ def process_html(html_content, output_dir, playable_html=None):
         head = soup.new_tag('head')
         soup.insert(0, head)
 
-    # Inject standard Google Ads clickTag and local exit handler (No external network scripts)
+    # Automatically remove unauthorized external scripts/links/iframes that trigger 4th-party call violations
+    allowed_domains = ['fonts.googleapis.com', 'fonts.gstatic.com', 'ajax.googleapis.com', 'google.com', 'gstatic.com']
+    for tag in soup.find_all(['script', 'link', 'iframe']):
+        attr = 'src' if tag.name in ['script', 'iframe'] else 'href'
+        url = tag.get(attr, '')
+        if url.startswith(('http://', 'https://', '//')):
+            if not any(domain in url for domain in allowed_domains):
+                tag.decompose() # Safely remove the external 4th-party dependency
+
+    # Inject standard Google Ads clickTag and local exit handler
     exit_script = soup.new_tag('script')
     exit_script.string = """
     // Google Ads required global clickTag variable

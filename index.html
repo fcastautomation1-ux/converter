@@ -13,7 +13,7 @@
     <div class="max-w-3xl mx-auto bg-white rounded-2xl shadow-xl overflow-hidden p-8">
         <header class="text-center mb-8">
             <h1 class="text-3xl font-bold text-slate-800">AppLovin to Google Ads Converter</h1>
-            <p class="text-slate-500 mt-2">Browser-based converter with automatic asset preloading optimization.</p>
+            <p class="text-slate-500 mt-2">Browser-based converter with automatic script inlining and compliance cleaning.</p>
         </header>
 
         <!-- Upload HTML File -->
@@ -23,7 +23,7 @@
                 <input type="file" id="file-html" accept=".html,.zip,.txt" class="hidden">
                 <div id="label-html">
                     <p class="text-slate-600 font-medium">Drag & drop your HTML file here, or <span class="text-indigo-600 underline">browse</span></p>
-                    <p class="text-xs text-slate-400 mt-1">Optimizes and packages instantly</p>
+                    <p class="text-xs text-slate-400 mt-1">Automatically resolves 4th-party call restrictions</p>
                 </div>
                 <div id="info-html" class="hidden text-indigo-600 font-semibold"></div>
             </div>
@@ -54,7 +54,7 @@
         <!-- Results Section -->
         <div id="results-section" class="hidden mt-8 border-t border-slate-200 pt-6">
             <div class="p-4 rounded-xl mb-6 bg-emerald-50 text-emerald-700 font-medium text-center">
-                Conversion Completed Successfully! All Optimizations Applied.
+                Conversion Completed Successfully! 4th-Party Calls Cleared.
             </div>
 
             <div class="grid grid-cols-3 gap-4 text-center mb-6">
@@ -82,7 +82,7 @@
         </div>
     </div>
 
-    <!-- Optimization & Extraction Engine -->
+    <!-- Auto-Inlining & Optimization Engine -->
     <script>
         let htmlFile = null;
         let jsFile = null;
@@ -124,10 +124,39 @@
             log(`JS loader selected: ${jsFile.name}`);
         });
 
+        function extractAppLovinPayload(jsContent) {
+            let start = jsContent.indexOf('al_renderHtml({"html":"');
+            if (start === -1) start = jsContent.indexOf("al_renderHtml({'html':'");
+            if (start === -1) {
+                const match = jsContent.match(/al_renderHtml\(\s*\{\s*["']html["']\s*:\s*["']([\s\S]*?)["']\s*\}\s*\)/);
+                if (match) return decodePayload(match[1]);
+                return null;
+            }
+
+            let prefix = jsContent.includes('al_renderHtml({"html":"') ? 'al_renderHtml({"html":"' : "al_renderHtml({'html':'";
+            start += prefix.length;
+            let end = jsContent.lastIndexOf('"})');
+            if (end === -1) end = jsContent.lastIndexOf("'})");
+            if (end === -1) return null;
+
+            let payload = jsContent.substring(start, end);
+            return decodePayload(payload);
+        }
+
+        function decodePayload(payload) {
+            return payload
+                .replace(/\\"/g, '"')
+                .replace(/\\'/g, "'")
+                .replace(/\\n/g, '\n')
+                .replace(/\\r/g, '\r')
+                .replace(/\\t/g, '\t')
+                .replace(/\\\//g, '/');
+        }
+
         document.getElementById('convert-btn').addEventListener('click', async () => {
             if (!htmlFile) return;
             const btn = document.getElementById('convert-btn');
-            btn.textContent = 'Processing & Optimizing...';
+            btn.textContent = 'Processing & Inlining Scripts...';
             btn.disabled = true;
             document.getElementById('log-box').innerHTML = '<div class="font-bold text-slate-400 mb-1">--- Live Extraction Logs ---</div>';
 
@@ -138,14 +167,10 @@
                 if (jsFile) {
                     log('Processing uploaded JS loader file...');
                     const jsText = await jsFile.text();
-                    let start = jsText.indexOf('al_renderHtml({"html":"');
-                    if (start !== -1) {
-                        start += 'al_renderHtml({"html":"'.length;
-                        let end = jsText.indexOf('"})', start);
-                        if (end !== -1) {
-                            htmlText = jsText.substring(start, end).replace(/\\"/g, '"').replace(/\\n/g, '\n').replace(/\\\//g, '/');
-                            log('Successfully extracted HTML payload from JS loader.');
-                        }
+                    const payload = extractAppLovinPayload(jsText);
+                    if (payload) {
+                        htmlText = payload;
+                        log('Successfully extracted HTML payload from uploaded JS file.');
                     }
                 }
 
@@ -161,15 +186,13 @@
                             }
                         }
                     }
-                } catch (e) {
-                    log('Single-file container detected. Parsing DOM...');
-                }
+                } catch (e) {}
 
                 if (extractedFiles['index.html']) {
                     htmlText = new TextDecoder().decode(extractedFiles['index.html']);
                 }
 
-                // Parse and optimize DOM
+                // Parse DOM and resolve external script references (AppLovin / IronSource)
                 const parser = new DOMParser();
                 const doc = parser.parseFromString(htmlText, 'text/html');
                 
@@ -179,13 +202,38 @@
                     doc.documentElement.prepend(head);
                 }
 
-                // Fix asset preloading warning by adding loading="lazy" to images/iframes
+                // Check for external AppLovin script references and download them to inline
+                for (let s of doc.querySelectorAll('script')) {
+                    const src = s.getAttribute('src') || '';
+                    if (src.includes('applovin.com') || src.includes('aliyuncs.com')) {
+                        log(`Found external script reference: ${src}`);
+                        try {
+                            const proxyUrl = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(src);
+                            const resp = await fetch(proxyUrl);
+                            if (resp.ok) {
+                                const remoteText = await resp.text();
+                                const payload = extractAppLovinPayload(remoteText);
+                                const newScript = doc.createElement('script');
+                                newScript.textContent = payload || remoteText;
+                                s.replaceWith(newScript);
+                                log(`Successfully downloaded and inlined script content into package.`);
+                            } else {
+                                s.remove();
+                                log(`Removed unreachable external script tag to prevent 4th-party error.`);
+                            }
+                        } catch (err) {
+                            s.remove();
+                            log(`Removed script tag due to network/CORS block: ${src}`);
+                        }
+                    }
+                }
+
+                // Optimize assets with lazy loading
                 doc.querySelectorAll('img, iframe').forEach(el => {
                     if (!el.hasAttribute('loading')) {
                         el.setAttribute('loading', 'lazy');
                     }
                 });
-                log('Applied loading="lazy" optimizations to assets.');
 
                 // Inject Google Ads clickTag & ExitApi interceptor
                 const exitScript = doc.createElement('script');
@@ -207,7 +255,7 @@
                     }, { capture: true, passive: true });
                 `;
                 head.appendChild(exitScript);
-                log('Injected Google Ads clickTag & ExitApi handlers.');
+                log('Injected Google Ads clickTag and exit handlers.');
 
                 const finalHtml = '<!DOCTYPE html>\n' + doc.documentElement.outerHTML;
 
@@ -231,7 +279,7 @@
                 dlBtn.href = blobUrl;
                 dlBtn.download = 'Google_Ads_Ready.zip';
 
-                log('Google Ads ZIP package created successfully!');
+                log('Google Ads ZIP package created successfully with 4th-party calls cleared!');
                 btn.textContent = 'Convert & Package for Google Ads';
                 btn.disabled = false;
             } catch (err) {

@@ -31,22 +31,10 @@ def process_html(html_content, output_dir, playable_html=None):
         head = soup.new_tag('head')
         soup.insert(0, head)
 
-    # 1. Inject Google Ads Exit API script
-    api_script_exists = any(
-        'studiodapi.js' in str(script.get('src', '')) 
-        for script in head.find_all('script')
-    )
-    if not api_script_exists:
-        google_api_tag = soup.new_tag(
-            'script', 
-            src='https://www.google.com/doubleclick/studio/studiodapi.js'
-        )
-        head.insert(0, google_api_tag)
-
-    # 2. Inject standard clickTag and ExitApi integration script
+    # Inject standard Google Ads clickTag and local exit handler (No external network scripts)
     exit_script = soup.new_tag('script')
     exit_script.string = """
-    // Google Ads required clickTag
+    // Google Ads required global clickTag variable
     var clickTag = "https://www.google.com";
 
     window.open = function(url) {
@@ -58,13 +46,6 @@ def process_html(html_content, output_dir, playable_html=None):
             window.location.href = window.clickTag || url;
         }
     };
-
-    document.addEventListener('click', function(e) {
-        // Intercept clicks to ensure Google Ads exit triggers correctly
-        if (typeof ExitApi !== 'undefined' && ExitApi.exit) {
-            // Let ExitApi handle interaction if available
-        }
-    }, true);
     """
     head.append(exit_script)
 

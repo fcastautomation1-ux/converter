@@ -26,43 +26,31 @@ def extract_applovin_payload(js_content):
 
 def parse_applovin_payload(html_file, js_file=None):
     """
-    Parses AppLovin inputs. Ensures extracted_html is actual HTML code 
-    and extracted_folder points to the unpacked game assets directory.
+    Parses AppLovin inputs. Extracts embedded zip assets and returns 
+    (target_html, extracted_folder).
     """
-    extracted_html = None
-    extracted_folder = None
-
-    # 1. Get HTML content from JS file if provided, otherwise read the uploaded HTML file
+    html_content = ""
+    
     if js_file:
         with open(js_file, "r", encoding="utf-8", errors="ignore") as f:
             js_content = f.read()
-        extracted_html = extract_applovin_payload(js_content)
+        html_content = extract_applovin_payload(js_content)
 
-    if not extracted_html:
+    if not html_content and os.path.exists(html_file):
         with open(html_file, "r", encoding="utf-8", errors="ignore") as f:
-            extracted_html = f.read()
+            html_content = f.read()
 
-    # 2. Extract embedded assets/folders safely without breaking HTML content
-    try:
-        res = extract_embedded_zip(html_file)
-        if isinstance(res, tuple):
-            html_res, folder_res = res
-            if html_res and ("<html" in html_res.lower() or "<doctype" in html_res.lower() or "<script" in html_res.lower()):
-                extracted_html = html_res
-            if folder_res and os.path.isdir(folder_res):
-                extracted_folder = folder_res
-        elif isinstance(res, str) and os.path.isdir(res):
-            extracted_folder = res
-            # Check if an index.html exists inside the extracted folder
-            idx_path = os.path.join(res, "index.html")
-            if os.path.exists(idx_path):
-                with open(idx_path, "r", encoding="utf-8", errors="ignore") as f:
-                    content = f.read()
-                    if content and len(content.strip()) > 100:
-                        extracted_html = content
-        elif isinstance(res, str) and ("<html" in res.lower() or "<doctype" in res.lower()):
-            extracted_html = res
-    except Exception as e:
-        print("Extraction notice:", e)
+    # Pass html_file path to the universal extractor
+    input_target = html_file if os.path.exists(html_file) else html_content
+    extracted_folder, extracted_files = extract_embedded_zip(input_target)
 
-    return extracted_html, extracted_folder
+    # Use index.html from the extracted assets if available
+    target_html = html_content
+    index_path = os.path.join(extracted_folder, "index.html")
+    if os.path.exists(index_path):
+        with open(index_path, "r", encoding="utf-8", errors="ignore") as f:
+            extracted_html_content = f.read()
+            if extracted_html_content and len(extracted_html_content.strip()) > 50:
+                target_html = extracted_html_content
+
+    return target_html, extracted_folder

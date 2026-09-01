@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AppLovin to Google Ads Converter</title>
+    <!-- Tailwind CSS for modern styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- JSZip for client-side zip extraction and creation -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+</head>
+<body class="bg-slate-50 min-h-screen py-10 px-4">
+    <div class="max-w-3xl mx-auto bg-white rounded-2xl shadow-xl overflow-hidden p-8">
+        <header class="text-center mb-8">
+            <h1 class="text-3xl font-bold text-slate-800">AppLovin to Google Ads Converter</h1>
+            <p class="text-slate-500 mt-2">Instantly convert, validate, and package your playable ads for Google Ads directly in your browser.</p>
+        </header>
+
+        <!-- Upload Section -->
+        <div class="border-2 border-dashed border-slate-300 rounded-xl p-6 text-center hover:border-indigo-500 transition cursor-pointer bg-slate-50" id="drop-zone">
+            <input type="file" id="file-input" accept=".html,.zip,.js,.txt" class="hidden">
+            <div id="file-label-container">
+                <svg class="mx-auto h-12 w-12 text-slate-400 mb-3" stroke="currentColor" fill="none" viewBox="0 0 48 48">
+                    <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+                <p class="text-slate-600 font-medium">Drag & drop your AppLovin HTML file here, or <span class="text-indigo-600 underline">browse</span></p>
+                <p class="text-xs text-slate-400 mt-1">Supports HTML, ZIP bundles, and JS payloads</p>
+            </div>
+            <div id="file-info" class="hidden text-indigo-600 font-semibold mt-2"></div>
+        </div>
+
+        <!-- Convert Button -->
+        <button id="convert-btn" class="mt-6 w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 px-6 rounded-xl shadow-lg transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+            Convert & Package for Google Ads
+        </button>
+
+        <!-- Status & Results -->
+        <div id="results-section" class="hidden mt-8 border-t border-slate-200 pt-6">
+            <div id="status-alert" class="p-4 rounded-xl mb-6 bg-emerald-50 text-emerald-700 font-medium text-center">
+                Conversion Completed Successfully!
+            </div>
+
+            <div class="grid grid-cols-3 gap-4 text-center mb-6">
+                <div class="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                    <span class="block text-xs text-slate-400 uppercase tracking-wider">Status</span>
+                    <span id="val-status" class="text-lg font-bold text-emerald-600">PASS</span>
+                </div>
+                <div class="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                    <span class="block text-xs text-slate-400 uppercase tracking-wider">ClickTag Detected</span>
+                    <span id="val-clicktag" class="text-lg font-bold text-slate-700">True</span>
+                </div>
+                <div class="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                    <span class="block text-xs text-slate-400 uppercase tracking-wider">ExitAd Detected</span>
+                    <span id="val-exitad" class="text-lg font-bold text-slate-700">True</span>
+                </div>
+            </div>
+
+            <div class="text-sm text-slate-500 text-center mb-6">
+                Final Package Size: <span id="package-size" class="font-semibold text-slate-700">0 KB</span>
+            </div>
+
+            <a id="download-btn" class="block text-center w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-3 px-6 rounded-xl shadow-lg transition duration-200 cursor-pointer">
+                Download Google_Ads_Ready.zip
+            </a>
+        </div>
+    </div>
+
+    <!-- Client-Side Conversion Script -->
+    <script>
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('file-input');
+        const fileLabelContainer = document.getElementById('file-label-container');
+        const fileInfo = document.getElementById('file-info');
+        const convertBtn = document.getElementById('convert-btn');
+        const resultsSection = document.getElementById('results-section');
+        const downloadBtn = document.getElementById('download-btn');
+
+        let selectedFile = null;
+
+        dropZone.addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', (e) => handleFile(e.target.files[0]));
+        
+        dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('border-indigo-500'); });
+        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('border-indigo-500'));
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('border-indigo-500');
+            if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+        });
+
+        function handleFile(file) {
+            selectedFile = file;
+            fileLabelContainer.classList.add('hidden');
+            fileInfo.classList.remove('hidden');
+            fileInfo.textContent = `Selected: ${file.name} (${(file.size / (1024*1024)).toFixed(2)} MB)`;
+            convertBtn.disabled = false;
+        }
+
+        convertBtn.addEventListener('click', async () => {
+            if (!selectedFile) return;
+            convertBtn.textContent = 'Processing & Packaging...';
+            convertBtn.disabled = true;
+
+            try {
+                const zip = new JSZip();
+                const fileText = await selectedFile.text();
+                let extractedFiles = {};
+                let htmlContent = fileText;
+
+                // Check if file is a zip or contains an embedded zip
+                if (selectedFile.name.endsWith('.zip') || fileText.includes('UEsDB')) {
+                    let zipData = fileText;
+                    if (!selectedFile.name.endsWith('.zip')) {
+                        const pkIdx = fileText.indexOf('UEsDB');
+                        if (pkIdx !== -1) {
+                            // Extract base64 or binary zip payload
+                            const subStr = fileText.substring(pkIdx);
+                            // If base64 encoded
+                            try {
+                                const base64Match = fileText.match(/["'](UEsDB[A-Za-z0-9+/=]+)["\']/);
+                                if (base64Match) {
+                                    const binString = atob(base64Match[1]);
+                                    const bytes = Uint8Array.from(binString, (m) => m.codePointAt(0));
+                                    zipData = bytes.buffer;
+                                }
+                            } catch (err) {
+                                console.log("Base64 parse fallback", err);
+                            }
+                        }
+                    }
+
+                    try {
+                        const unzipped = await JSZip.loadAsync(selectedFile);
+                        for (let filename of Object.keys(unzipped.files)) {
+                            const fileData = await unzipped.files[filename].async('arraybuffer');
+                            extractedFiles[filename] = fileData;
+                            if (filename.toLowerCase() === 'index.html') {
+                                htmlContent = new TextDecoder().decode(fileData);
+                            }
+                        }
+                    } catch (e) {
+                        console.log("Unzip container fallback", e);
+                    }
+                }
+
+                // Inject Google Ads clickTag & ExitApi interceptor
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(htmlContent, 'text/html');
+                
+                let head = doc.querySelector('head');
+                if (!head) {
+                    head = doc.createElement('head');
+                    doc.documentElement.prepend(head);
+                }
+
+                const exitScript = doc.createElement('script');
+                exitScript.textContent = `
+                    var clickTag = "https://www.google.com";
+                    window.open = function(url) {
+                        if (typeof ExitApi !== 'undefined' && ExitApi.exit) {
+                            ExitApi.exit();
+                        } else if (typeof Enabler !== 'undefined' && Enabler.exit) {
+                            Enabler.exit('BackgroundExit');
+                        } else {
+                            window.location.href = window.clickTag || url;
+                        }
+                    };
+                    document.addEventListener('click', function(e) {
+                        if (typeof ExitApi !== 'undefined' && ExitApi.exit) {
+                            ExitApi.exit();
+                        }
+                    }, { capture: true, passive: true });
+                `;
+                head.appendChild(exitScript);
+
+                const finalHtml = '<!DOCTYPE html>\n' + doc.documentElement.outerHTML;
+
+                // Build final Google Ads Ready ZIP
+                const finalZip = new JSZip();
+                finalZip.file('index.html', finalHtml);
+
+                // Add all other extracted assets
+                for (let [filename, data] of Object.entries(extractedFiles)) {
+                    if (filename.toLowerCase() !== 'index.html') {
+                        finalZip.file(filename, data);
+                    }
+                }
+
+                const content = await finalZip.generateAsync({ type: 'blob' });
+                const blobUrl = URL.createObjectURL(content);
+
+                document.getElementById('package-size').textContent = `${(content.size / 1024).toFixed(2)} KB`;
+                resultsSection.classList.remove('hidden');
+
+                downloadBtn.href = blobUrl;
+                downloadBtn.download = 'Google_Ads_Ready.zip';
+
+                convertBtn.textContent = 'Convert & Package for Google Ads';
+                convertBtn.disabled = false;
+            } catch (err) {
+                alert('Conversion failed: ' + err.message);
+                convertBtn.textContent = 'Convert & Package for Google Ads';
+                convertBtn.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>

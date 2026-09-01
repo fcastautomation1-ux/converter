@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+google_ads_output/
+extracted_assets/
+FINAL_BACKUP/
+FINAL_WORKING_BACKUP_2026_08_31/
+FINAL_WORKING_VERSION/
+*.zip
+*.html
+*.js
+*.pyc
+.DS_Store

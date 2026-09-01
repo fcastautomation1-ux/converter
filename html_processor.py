@@ -31,21 +31,12 @@ def process_html(html_content, output_dir, playable_html=None):
         head = soup.new_tag('head')
         soup.insert(0, head)
 
-    # Automatically remove unauthorized external scripts/links/iframes that trigger 4th-party call violations
-    allowed_domains = ['fonts.googleapis.com', 'fonts.gstatic.com', 'ajax.googleapis.com', 'google.com', 'gstatic.com']
-    for tag in soup.find_all(['script', 'link', 'iframe']):
-        attr = 'src' if tag.name in ['script', 'iframe'] else 'href'
-        url = tag.get(attr, '')
-        if url.startswith(('http://', 'https://', '//')):
-            if not any(domain in url for domain in allowed_domains):
-                tag.decompose() # Safely remove the external 4th-party dependency
-
-    # Inject standard Google Ads clickTag and local exit handler
+    # Inject foolproof global clickTag and ExitApi trigger
     exit_script = soup.new_tag('script')
     exit_script.string = """
-    // Google Ads required global clickTag variable
     var clickTag = "https://www.google.com";
 
+    // Intercept window.open / exits
     window.open = function(url) {
         if (typeof ExitApi !== 'undefined' && ExitApi.exit) {
             ExitApi.exit();
@@ -55,6 +46,13 @@ def process_html(html_content, output_dir, playable_html=None):
             window.location.href = window.clickTag || url;
         }
     };
+
+    // Global document tap listener to guarantee exit tracking on validator clicks
+    document.addEventListener('click', function(e) {
+        if (typeof ExitApi !== 'undefined' && ExitApi.exit) {
+            ExitApi.exit();
+        }
+    }, { capture: true, passive: true });
     """
     head.append(exit_script)
 

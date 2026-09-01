@@ -5,36 +5,46 @@ from bs4 import BeautifulSoup
 from embedded_zip_extractor import extract_embedded_zip
 
 def extract_applovin_payload(js_content):
+    # Look for al_renderHtml wrappers
     start = js_content.find('al_renderHtml({"html":"')
     if start == -1:
+        start = js_content.find("al_renderHtml({'html':'")
+    if start == -1:
+        match = re.search(r'al_renderHtml\(\s*\{\s*["\']html["\']\s*:\s*["\'](.*?)["\']\s*\}\s*\)', js_content, re.DOTALL)
+        if match:
+            return decode_payload(match.group(1))
         return None
 
-    start += len('al_renderHtml({"html":"')
+    prefix = 'al_renderHtml({"html":"' if 'al_renderHtml({"html":"' in js_content else "al_renderHtml({'html':'"
+    start += len(prefix)
+    
     end = js_content.find('"})', start)
-
     if end == -1:
-        # Fallback search for alternative quote closures
+        end = js_content.find("'})", start)
+    if end == -1:
         end = js_content.rfind('")')
 
     if end == -1:
         return None
 
     payload = js_content[start:end]
+    return decode_payload(payload)
 
-    payload = (
+def decode_payload(payload):
+    return (
         payload
         .replace('\\"', '"')
+        .replace("\\'", "'")
         .replace("\\n", "\n")
         .replace("\\r", "\r")
         .replace("\\t", "\t")
         .replace("\\/", "/")
     )
-    return payload
 
 def parse_applovin_payload(html_file, js_file=None):
     """
-    Parses AppLovin inputs. If the HTML contains an external AppLovin script URL,
-    it downloads it, extracts the payload, and returns the fully inlined HTML.
+    Parses AppLovin inputs. Detects external script references, downloads them,
+    and extracts the actual underlying game HTML payload.
     """
     html_content = ""
     
@@ -45,32 +55,40 @@ def parse_applovin_payload(html_file, js_file=None):
 
     if not html_content and os.path.exists(html_file):
         with open(html_file, "r", encoding="utf-8", errors="ignore") as f:
-            html_content = f.read()
-
-    # Check if HTML contains an external script pointing to AppLovin
-    soup = BeautifulSoup(html_content, "html.parser")
-    for script in soup.find_all("script"):
-        src = script.get("src", "")
-        if "applovin.com" in src:
+            raw_html = f.read()
+        
+        # Check if raw HTML contains an external AppLovin script URL
+        soup = BeautifulSoup(raw_html, "html.parser")
+        script_url = None
+        for s in soup.find_all("script"):
+            src = s.get("src", "")
+            if "applovin.com" in src:
+                script_url = src
+                break
+        
+        if script_url:
             try:
-                print("Fetching external AppLovin payload from:", src)
-                response = requests.get(src, timeout=10)
-                if response.status_code == 200:
-                    extracted_payload = extract_applovin_payload(response.text)
-                    if extracted_payload:
-                        # Replace the external script tag with the actual inline HTML/game code
-                        new_tag = soup.new_tag("script")
-                        new_tag.string = extracted_payload
-                        script.replace_with(new_tag)
-                        html_content = str(soup)
+                print("Fetching external AppLovin script payload from:", script_url)
+                resp = requests.get(script_url, timeout=15)
+                if resp.status_code == 200:
+                    payload = extract_applovin_payload(resp.text)
+                    if payload:
+                        html_content = payload
             except Exception as e:
-                print("Failed to fetch external AppLovin script:", e)
+                print("Error fetching remote AppLovin script:", e)
+        
+        if not html_content:
+            # Check if payload is directly inside the file content
+            payload = extract_applovin_payload(raw_html)
+            if payload:
+                html_content = payload
+            else:
+                html_content = raw_html
 
-    # Also run embedded zip extractor for bundled assets
+    # Handle embedded zips if present
     input_target = html_file if os.path.exists(html_file) else html_content
     extracted_folder, extracted_files = extract_embedded_zip(input_target)
 
-    # Use index.html from extracted folder if available
     target_html = html_content
     index_path = os.path.join(extracted_folder, "index.html")
     if os.path.exists(index_path):

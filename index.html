@@ -13,17 +13,17 @@
     <div class="max-w-3xl mx-auto bg-white rounded-2xl shadow-xl overflow-hidden p-8">
         <header class="text-center mb-8">
             <h1 class="text-3xl font-bold text-slate-800">AppLovin to Google Ads Converter</h1>
-            <p class="text-slate-500 mt-2">Fast converter with non-blocking remote script handling.</p>
+            <p class="text-slate-500 mt-2">Robust ZIP & HTML processor with automated asset folder flattening.</p>
         </header>
 
-        <!-- Single Upload Box -->
+        <!-- Upload Box -->
         <div class="mb-6">
-            <label class="block text-sm font-medium text-slate-700 mb-2">Upload AppLovin HTML File <span class="text-red-500">*</span></label>
+            <label class="block text-sm font-medium text-slate-700 mb-2">Upload Ad ZIP Archive or HTML File <span class="text-red-500">*</span></label>
             <div class="border-2 border-dashed border-slate-300 rounded-xl p-6 text-center hover:border-indigo-500 transition cursor-pointer bg-slate-50" id="drop-zone-html">
                 <input type="file" id="file-html" accept=".html,.zip,.txt" class="hidden">
                 <div id="label-html">
-                    <p class="text-slate-600 font-medium">Drag & drop your HTML file here, or <span class="text-indigo-600 underline">browse</span></p>
-                    <p class="text-xs text-slate-400 mt-1">Never freezes—handles blocks gracefully</p>
+                    <p class="text-slate-600 font-medium">Drag & drop your ZIP or HTML file here, or <span class="text-indigo-600 underline">browse</span></p>
+                    <p class="text-xs text-slate-400 mt-1">Handles nested asset folders and keeps all textures intact</p>
                 </div>
                 <div id="info-html" class="hidden text-indigo-600 font-semibold"></div>
             </div>
@@ -42,7 +42,7 @@
         <!-- Results Section -->
         <div id="results-section" class="hidden mt-8 border-t border-slate-200 pt-6">
             <div class="p-4 rounded-xl mb-6 bg-emerald-50 text-emerald-700 font-medium text-center">
-                Conversion Completed Successfully! Ready for Google Ads.
+                Conversion Completed Successfully! ZIP Ready for Google Ads.
             </div>
 
             <div class="grid grid-cols-3 gap-4 text-center mb-6">
@@ -70,9 +70,9 @@
         </div>
     </div>
 
-    <!-- Non-Blocking Processing Engine -->
+    <!-- Advanced ZIP Processing Engine -->
     <script>
-        let htmlFile = null;
+        let uploadedFile = null;
 
         function log(message) {
             const box = document.getElementById('log-box');
@@ -82,74 +82,82 @@
             console.log(message);
         }
 
-        const dropHtml = document.getElementById('drop-zone-html');
-        const inputHtml = document.getElementById('file-html');
-        const infoHtml = document.getElementById('info-html');
-        const labelHtml = document.getElementById('label-html');
+        const dropZone = document.getElementById('drop-zone-html');
+        const fileInput = document.getElementById('file-html');
+        const infoDiv = document.getElementById('info-html');
+        const labelDiv = document.getElementById('label-html');
 
-        dropHtml.addEventListener('click', () => inputHtml.click());
-        inputHtml.addEventListener('change', (e) => {
-            htmlFile = e.target.files[0];
-            labelHtml.classList.add('hidden');
-            infoHtml.classList.remove('hidden');
-            infoHtml.textContent = `File: ${htmlFile.name} (${(htmlFile.size / (1024*1024)).toFixed(2)} MB)`;
+        dropZone.addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', (e) => {
+            uploadedFile = e.target.files[0];
+            labelDiv.classList.add('hidden');
+            infoDiv.classList.remove('hidden');
+            infoDiv.textContent = `File: ${uploadedFile.name} (${(uploadedFile.size / (1024*1024)).toFixed(2)} MB)`;
             document.getElementById('convert-btn').disabled = false;
-            log(`HTML file selected: ${htmlFile.name}`);
+            log(`File selected: ${uploadedFile.name}`);
         });
 
-        function extractAppLovinPayload(jsContent) {
-            let start = jsContent.indexOf('al_renderHtml({"html":"');
-            if (start === -1) start = jsContent.indexOf("al_renderHtml({'html':'");
-            if (start === -1) {
-                const match = jsContent.match(/al_renderHtml\(\s*\{\s*["']html["']\s*:\s*["']([\s\S]*?)["']\s*\}\s*\)/);
-                if (match) return decodePayload(match[1]);
-                return null;
-            }
-
-            let prefix = jsContent.includes('al_renderHtml({"html":"') ? 'al_renderHtml({"html":"' : "al_renderHtml({'html':'";
-            start += prefix.length;
-            let end = jsContent.lastIndexOf('"})');
-            if (end === -1) end = jsContent.lastIndexOf("'})");
-            if (end === -1) return null;
-
-            let payload = jsContent.substring(start, end);
-            return decodePayload(payload);
-        }
-
-        function decodePayload(payload) {
-            return payload
-                .replace(/\\"/g, '"')
-                .replace(/\\'/g, "'")
-                .replace(/\\n/g, '\n')
-                .replace(/\\r/g, '\r')
-                .replace(/\\t/g, '\t')
-                .replace(/\\\//g, '/');
-        }
-
         document.getElementById('convert-btn').addEventListener('click', async () => {
-            if (!htmlFile) return;
+            if (!uploadedFile) return;
             const btn = document.getElementById('convert-btn');
-            btn.textContent = 'Processing...';
+            btn.textContent = 'Unpacking ZIP & Processing Assets...';
             btn.disabled = true;
             document.getElementById('log-box').innerHTML = '<div class="font-bold text-slate-400 mb-1">--- Live Extraction Logs ---</div>';
 
             try {
-                let htmlText = await htmlFile.text();
+                let htmlText = "";
                 let extractedFiles = {};
+                const arrayBuffer = await uploadedFile.arrayBuffer();
 
-                const arrayBuffer = await htmlFile.arrayBuffer();
-                try {
+                let isZip = uploadedFile.name.endsWith('.zip');
+                const bytes = new Uint8Array(arrayBuffer);
+                if (bytes[0] === 0x50 && bytes[1] === 0x4B) {
+                    isZip = true;
+                }
+
+                if (isZip) {
+                    log('Detected ZIP archive container. Unpacking structure...');
                     const unzipped = await JSZip.loadAsync(arrayBuffer);
-                    for (let fn of Object.keys(unzipped.files)) {
+                    let keys = Object.keys(unzipped.files);
+
+                    // Find index.html even if nested inside a root folder (e.g. ad_folder/index.html)
+                    let indexPath = keys.find(k => k.toLowerCase().endsWith('/index.html') || k.toLowerCase() === 'index.html');
+                    
+                    let prefix = '';
+                    if (indexPath && indexPath !== 'index.html') {
+                        prefix = indexPath.substring(0, indexPath.lastIndexOf('index.html'));
+                        log(`Found nested root directory: ${prefix}`);
+                    }
+
+                    for (let fn of keys) {
                         const entry = unzipped.files[fn];
-                        if (!entry.dir && fn.toLowerCase() === 'index.html') {
-                            htmlText = await entry.async('text');
-                        } else if (!entry.dir) {
-                            extractedFiles[fn] = await entry.async('arraybuffer');
+                        if (!entry.dir) {
+                            let relativePath = fn;
+                            if (prefix && fn.startsWith(prefix)) {
+                                relativePath = fn.substring(prefix.length);
+                            }
+
+                            if (relativePath) {
+                                if (relativePath.toLowerCase() === 'index.html') {
+                                    htmlText = await entry.async('text');
+                                    log(`Located main entry point: index.html`);
+                                } else {
+                                    extractedFiles[relativePath] = await entry.async('arraybuffer');
+                                    log(`Extracted asset: ${relativePath}`);
+                                }
+                            }
                         }
                     }
-                } catch (e) {}
+                } else {
+                    htmlText = new TextDecoder().decode(arrayBuffer);
+                    log('Processed raw HTML file format.');
+                }
 
+                if (!htmlText) {
+                    throw new Error("Could not find index.html inside the uploaded package.");
+                }
+
+                // Parse DOM
                 const parser = new DOMParser();
                 const doc = parser.parseFromString(htmlText, 'text/html');
                 
@@ -159,71 +167,27 @@
                     doc.documentElement.prepend(head);
                 }
 
-                // Non-blocking remote fetch with timeout safeguard
-                let fetchedPayload = null;
-                const scriptTags = Array.from(doc.querySelectorAll('script[src]'));
-                
-                for (let s of scriptTags) {
-                    const src = s.getAttribute('src') || '';
-                    if (src.includes('applovin.com') || src.includes('aliyuncs.com') || src.includes('ironsource')) {
-                        log(`Found remote wrapper link: ${src}`);
-                        try {
-                            const proxyUrl = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(src);
-                            
-                            // Add a 5-second timeout so it never hangs
-                            const controller = new AbortController();
-                            const timeoutId = setTimeout(() => controller.abort(), 5000);
-                            
-                            const resp = await fetch(proxyUrl, { signal: controller.signal });
-                            clearTimeout(timeoutId);
-
-                            if (resp.ok) {
-                                const remoteText = await resp.text();
-                                const payload = extractAppLovinPayload(remoteText);
-                                if (payload) {
-                                    fetchedPayload = payload;
-                                    log(`Successfully downloaded game payload!`);
-                                    break;
-                                }
-                            }
-                        } catch (err) {
-                            log(`Remote fetch bypassed (server blocked or timed out). Cleaning tag...`);
-                            s.remove();
-                        }
-                    }
-                }
-
-                if (fetchedPayload) {
-                    htmlText = fetchedPayload;
-                }
-
-                const gameDoc = new DOMParser().parseFromString(htmlText, 'text/html');
-                let gameHead = gameDoc.querySelector('head');
-                if (!gameHead) {
-                    gameHead = gameDoc.createElement('head');
-                    gameDoc.documentElement.prepend(gameHead);
-                }
-
-                // Clean remaining 4th-party references
-                gameDoc.querySelectorAll('script[src], link[href], iframe').forEach(tag => {
+                // Clean 4th-party external scripts
+                doc.querySelectorAll('script[src], link[href], iframe').forEach(tag => {
                     const attr = tag.tagName === 'LINK' ? 'href' : 'src';
                     const url = tag.getAttribute(attr) || '';
                     if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('//')) {
                         if (!url.includes('fonts.googleapis.com') && !url.includes('ajax.googleapis.com')) {
                             tag.remove();
+                            log(`Cleaned external reference to ensure policy compliance.`);
                         }
                     }
                 });
 
-                // Lazy load optimization
-                gameDoc.querySelectorAll('img, iframe').forEach(el => {
+                // Asset lazy load optimization
+                doc.querySelectorAll('img, iframe').forEach(el => {
                     if (!el.hasAttribute('loading')) {
                         el.setAttribute('loading', 'lazy');
                     }
                 });
 
                 // Inject Google Ads clickTag & ExitApi interceptor
-                const exitScript = gameDoc.createElement('script');
+                const exitScript = doc.createElement('script');
                 exitScript.textContent = `
                     var clickTag = "https://www.google.com";
                     window.open = function(url) {
@@ -241,18 +205,17 @@
                         }
                     }, { capture: true, passive: true });
                 `;
-                gameHead.appendChild(exitScript);
+                head.appendChild(exitScript);
                 log('Injected Google Ads clickTag and exit handlers.');
 
-                const finalHtml = '<!DOCTYPE html>\n' + gameDoc.documentElement.outerHTML;
+                const finalHtml = '<!DOCTYPE html>\n' + doc.documentElement.outerHTML;
 
+                // Build final clean ZIP package
                 const finalZip = new JSZip();
                 finalZip.file('index.html', finalHtml);
 
                 for (let [fn, data] of Object.entries(extractedFiles)) {
-                    if (fn.toLowerCase() !== 'index.html') {
-                        finalZip.file(fn, data);
-                    }
+                    finalZip.file(fn, data);
                 }
 
                 const content = await finalZip.generateAsync({ type: 'blob' });
@@ -265,7 +228,7 @@
                 dlBtn.href = blobUrl;
                 dlBtn.download = 'Google_Ads_Ready.zip';
 
-                log('Google Ads ZIP package created successfully!');
+                log('Google Ads ZIP package created successfully with all assets preserved!');
                 btn.textContent = 'Convert & Package for Google Ads';
                 btn.disabled = false;
             } catch (err) {

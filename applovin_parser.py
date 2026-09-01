@@ -7,7 +7,7 @@ def extract_applovin_payload(js_content):
         return None
 
     start += len('al_renderHtml({"html":"')
-    end = js_content.find(''"})'', start)
+    end = js_content.find('"})', start)
 
     if end == -1:
         return None

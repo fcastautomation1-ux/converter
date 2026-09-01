@@ -13,7 +13,7 @@
     <div class="max-w-3xl mx-auto bg-white rounded-2xl shadow-xl overflow-hidden p-8">
         <header class="text-center mb-8">
             <h1 class="text-3xl font-bold text-slate-800">AppLovin to Google Ads Converter</h1>
-            <p class="text-slate-500 mt-2">Universal browser-based converter with full asset folder support.</p>
+            <p class="text-slate-500 mt-2">Browser-based converter with gameplay-friendly exit handling.</p>
         </header>
 
         <!-- Upload HTML/ZIP File -->
@@ -23,7 +23,6 @@
                 <input type="file" id="file-html" accept=".html,.zip,.txt,.js" class="hidden">
                 <div id="label-html">
                     <p class="text-slate-600 font-medium">Drag & drop your file here, or <span class="text-indigo-600 underline">browse</span></p>
-                    <p class="text-xs text-slate-400 mt-1">Supports Zips, Cocos bundles, and HTML wrappers</p>
                 </div>
                 <div id="info-html" class="hidden text-indigo-600 font-semibold"></div>
             </div>
@@ -54,7 +53,7 @@
         <!-- Results Section -->
         <div id="results-section" class="hidden mt-8 border-t border-slate-200 pt-6">
             <div class="p-4 rounded-xl mb-6 bg-emerald-50 text-emerald-700 font-medium text-center">
-                Conversion Completed Successfully!
+                Conversion Completed Successfully! Gameplay Preserved.
             </div>
 
             <div class="grid grid-cols-3 gap-4 text-center mb-6">
@@ -82,7 +81,7 @@
         </div>
     </div>
 
-    <!-- Universal Processing Engine -->
+    <!-- Smart Conversion Engine -->
     <script>
         let htmlFile = null;
         let jsFile = null;
@@ -156,7 +155,7 @@
         document.getElementById('convert-btn').addEventListener('click', async () => {
             if (!htmlFile) return;
             const btn = document.getElementById('convert-btn');
-            btn.textContent = 'Processing & Packaging...';
+            btn.textContent = 'Processing & Optimizing...';
             btn.disabled = true;
             document.getElementById('log-box').innerHTML = '<div class="font-bold text-slate-400 mb-1">--- Live Extraction Logs ---</div>';
 
@@ -165,7 +164,6 @@
                 let htmlText = "";
                 const arrayBuffer = await htmlFile.arrayBuffer();
 
-                // 1. Check if uploaded file is a standard ZIP archive (.zip or starts with PK bytes)
                 let isZip = htmlFile.name.endsWith('.zip');
                 const bytes = new Uint8Array(arrayBuffer);
                 if (bytes[0] === 0x50 && bytes[1] === 0x4B) {
@@ -186,7 +184,6 @@
                         }
                     }
                 } else {
-                    // It's a text/HTML file or wrapper
                     htmlText = new TextDecoder().decode(arrayBuffer);
                     log('Detected text/HTML ad file.');
 
@@ -205,7 +202,7 @@
                     htmlText = new TextDecoder().decode(extractedFiles['index.html']);
                 }
 
-                // 2. Parse DOM and optimize/inject Google Ads requirements
+                // Parse DOM and optimize
                 const parser = new DOMParser();
                 const doc = parser.parseFromString(htmlText, 'text/html');
                 
@@ -222,10 +219,12 @@
                     }
                 });
 
-                // 3. Inject Google Ads clickTag & ExitApi interceptor
+                // Inject Smart Click/Exit Handler (Allows gameplay, exits on CTAs or window.open)
                 const exitScript = doc.createElement('script');
                 exitScript.textContent = `
                     var clickTag = "https://www.google.com";
+
+                    // Intercept window.open calls from game CTAs
                     window.open = function(url) {
                         if (typeof ExitApi !== 'undefined' && ExitApi.exit) {
                             ExitApi.exit();
@@ -235,18 +234,24 @@
                             window.location.href = window.clickTag || url;
                         }
                     };
+
+                    // Smart listener: Only trigger exit if clicking explicit CTA buttons/links, allowing gameplay canvas to function normally
                     document.addEventListener('click', function(e) {
-                        if (typeof ExitApi !== 'undefined' && ExitApi.exit) {
-                            ExitApi.exit();
+                        let target = e.target.closest('a, button, .cta, .button, [id*="cta"], [class*="cta"], [id*="button"], [class*="button"]');
+                        if (target) {
+                            if (typeof ExitApi !== 'undefined' && ExitApi.exit) {
+                                ExitApi.exit();
+                            } else {
+                                window.location.href = window.clickTag;
+                            }
                         }
                     }, { capture: true, passive: true });
                 `;
                 head.appendChild(exitScript);
-                log('Injected Google Ads clickTag and exit handlers.');
+                log('Injected smart gameplay-friendly exit handler.');
 
                 const finalHtml = '<!DOCTYPE html>\n' + doc.documentElement.outerHTML;
 
-                // 4. Build final Google Ads Ready ZIP (re-packing all folders if it was a zip, or single index.html)
                 const finalZip = new JSZip();
                 finalZip.file('index.html', finalHtml);
 
@@ -266,7 +271,7 @@
                 dlBtn.href = blobUrl;
                 dlBtn.download = 'Google_Ads_Ready.zip';
 
-                log('Google Ads ZIP package generated successfully!');
+                log('Google Ads ZIP package generated successfully with gameplay preserved!');
                 btn.textContent = 'Convert & Package for Google Ads';
                 btn.disabled = false;
             } catch (err) {

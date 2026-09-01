@@ -22,11 +22,13 @@ def create_google_ads_zip(
 ):
     temp_folder = "google_ads_output"
 
-    # Clean previous build
-    if os.path.exists(temp_folder):
-        shutil.rmtree(temp_folder)
-
-    os.makedirs(temp_folder, exist_ok=True)
+    # Clean previous build if it's a separate folder
+    if extracted_folder and os.path.abspath(extracted_folder) != os.path.abspath(temp_folder):
+        if os.path.exists(temp_folder):
+            shutil.rmtree(temp_folder)
+        os.makedirs(temp_folder, exist_ok=True)
+    else:
+        os.makedirs(temp_folder, exist_ok=True)
 
     # -----------------------------
     # Create index.html
@@ -36,12 +38,18 @@ def create_google_ads_zip(
         f.write(html_content)
 
     # -----------------------------
-    # Copy extracted files
+    # Copy extracted files (skip index.html to avoid self-copy error)
     # -----------------------------
     if extracted_folder and os.path.exists(extracted_folder):
         for item in os.listdir(extracted_folder):
+            if item.lower() == "index.html":
+                continue  # Skip index.html since we already created it
+                
             source = os.path.join(extracted_folder, item)
             destination = os.path.join(temp_folder, item)
+
+            if os.path.abspath(source) == os.path.abspath(destination):
+                continue
 
             if os.path.isdir(source):
                 shutil.copytree(source, destination, dirs_exist_ok=True)

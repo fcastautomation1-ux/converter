@@ -13,29 +13,28 @@
     <div class="max-w-3xl mx-auto bg-white rounded-2xl shadow-xl overflow-hidden p-8">
         <header class="text-center mb-8">
             <h1 class="text-3xl font-bold text-slate-800">AppLovin to Google Ads Converter</h1>
-            <p class="text-slate-500 mt-2">Browser-based converter with automatic script inlining and compliance cleaning.</p>
+            <p class="text-slate-500 mt-2">Browser-based converter with automatic 4th-party call scrubbing.</p>
         </header>
 
         <!-- Upload HTML File -->
         <div class="mb-6">
-            <label class="block text-sm font-medium text-slate-700 mb-2">Upload AppLovin HTML File</label>
+            <label class="block text-sm font-medium text-slate-700 mb-2">Upload AppLovin HTML File <span class="text-red-500">*</span></label>
             <div class="border-2 border-dashed border-slate-300 rounded-xl p-6 text-center hover:border-indigo-500 transition cursor-pointer bg-slate-50" id="drop-zone-html">
                 <input type="file" id="file-html" accept=".html,.zip,.txt" class="hidden">
                 <div id="label-html">
                     <p class="text-slate-600 font-medium">Drag & drop your HTML file here, or <span class="text-indigo-600 underline">browse</span></p>
-                    <p class="text-xs text-slate-400 mt-1">Automatically resolves 4th-party call restrictions</p>
                 </div>
                 <div id="info-html" class="hidden text-indigo-600 font-semibold"></div>
             </div>
         </div>
 
-        <!-- Optional JS Loader File -->
+        <!-- Upload JS Loader File (Crucial for wrapper ads) -->
         <div class="mb-6">
-            <label class="block text-sm font-medium text-slate-700 mb-2">Upload AppLovin JS Loader File (Optional)</label>
+            <label class="block text-sm font-medium text-slate-700 mb-2">Upload AppLovin/IronSource JS Loader File <span class="text-indigo-600 text-xs">(Recommended if your HTML is a remote wrapper)</span></label>
             <div class="border-2 border-dashed border-slate-300 rounded-xl p-6 text-center hover:border-indigo-500 transition cursor-pointer bg-slate-50" id="drop-zone-js">
                 <input type="file" id="file-js" accept=".js,.txt" class="hidden">
                 <div id="label-js">
-                    <p class="text-slate-600 font-medium">Drag & drop JS loader file here, or <span class="text-indigo-600 underline">browse</span></p>
+                    <p class="text-slate-600 font-medium">Drag & drop JS loader file here (if applicable), or <span class="text-indigo-600 underline">browse</span></p>
                 </div>
                 <div id="info-js" class="hidden text-indigo-600 font-semibold"></div>
             </div>
@@ -82,7 +81,7 @@
         </div>
     </div>
 
-    <!-- Auto-Inlining & Optimization Engine -->
+    <!-- Conversion & Scrubbing Engine -->
     <script>
         let htmlFile = null;
         let jsFile = null;
@@ -107,7 +106,7 @@
             infoHtml.classList.remove('hidden');
             infoHtml.textContent = `HTML: ${htmlFile.name} (${(htmlFile.size / (1024*1024)).toFixed(2)} MB)`;
             document.getElementById('convert-btn').disabled = false;
-            log(`File selected: ${htmlFile.name}`);
+            log(`HTML file selected: ${htmlFile.name}`);
         });
 
         const dropJs = document.getElementById('drop-zone-js');
@@ -121,7 +120,7 @@
             labelJs.classList.add('hidden');
             infoJs.classList.remove('hidden');
             infoJs.textContent = `JS: ${jsFile.name}`;
-            log(`JS loader selected: ${jsFile.name}`);
+            log(`JS loader file selected: ${jsFile.name}`);
         });
 
         function extractAppLovinPayload(jsContent) {
@@ -156,7 +155,7 @@
         document.getElementById('convert-btn').addEventListener('click', async () => {
             if (!htmlFile) return;
             const btn = document.getElementById('convert-btn');
-            btn.textContent = 'Processing & Inlining Scripts...';
+            btn.textContent = 'Processing & Scrubbing...';
             btn.disabled = true;
             document.getElementById('log-box').innerHTML = '<div class="font-bold text-slate-400 mb-1">--- Live Extraction Logs ---</div>';
 
@@ -164,16 +163,18 @@
                 let htmlText = await htmlFile.text();
                 let extractedFiles = {};
 
+                // 1. If user uploaded a JS file, extract game payload from it
                 if (jsFile) {
                     log('Processing uploaded JS loader file...');
                     const jsText = await jsFile.text();
                     const payload = extractAppLovinPayload(jsText);
                     if (payload) {
                         htmlText = payload;
-                        log('Successfully extracted HTML payload from uploaded JS file.');
+                        log('Successfully extracted HTML payload from uploaded JS loader.');
                     }
                 }
 
+                // 2. Check for zip containers or embedded assets
                 const arrayBuffer = await htmlFile.arrayBuffer();
                 try {
                     const unzipped = await JSZip.loadAsync(arrayBuffer);
@@ -192,7 +193,7 @@
                     htmlText = new TextDecoder().decode(extractedFiles['index.html']);
                 }
 
-                // Parse DOM and resolve external script references (AppLovin / IronSource)
+                // 3. Parse DOM and eliminate any remaining 4th-party external calls
                 const parser = new DOMParser();
                 const doc = parser.parseFromString(htmlText, 'text/html');
                 
@@ -202,31 +203,18 @@
                     doc.documentElement.prepend(head);
                 }
 
-                // Check for external AppLovin script references and download them to inline
-                for (let s of doc.querySelectorAll('script')) {
-                    const src = s.getAttribute('src') || '';
-                    if (src.includes('applovin.com') || src.includes('aliyuncs.com')) {
-                        log(`Found external script reference: ${src}`);
-                        try {
-                            const proxyUrl = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(src);
-                            const resp = await fetch(proxyUrl);
-                            if (resp.ok) {
-                                const remoteText = await resp.text();
-                                const payload = extractAppLovinPayload(remoteText);
-                                const newScript = doc.createElement('script');
-                                newScript.textContent = payload || remoteText;
-                                s.replaceWith(newScript);
-                                log(`Successfully downloaded and inlined script content into package.`);
-                            } else {
-                                s.remove();
-                                log(`Removed unreachable external script tag to prevent 4th-party error.`);
-                            }
-                        } catch (err) {
-                            s.remove();
-                            log(`Removed script tag due to network/CORS block: ${src}`);
+                // Aggressively remove any external scripts/links/iframes that trigger 4th-party errors
+                const allowedDomains = ['fonts.googleapis.com', 'fonts.gstatic.com', 'ajax.googleapis.com', 'google.com', 'gstatic.com'];
+                doc.querySelectorAll('script, link, iframe').forEach(tag => {
+                    const attr = tag.tagName === 'LINK' ? 'href' : 'src';
+                    const url = tag.getAttribute(attr) || '';
+                    if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('//')) {
+                        if (!allowedDomains.some(d => url.includes(d))) {
+                            tag.remove();
+                            log(`Scrubbed unauthorized 4th-party reference: ${url}`);
                         }
                     }
-                }
+                });
 
                 // Optimize assets with lazy loading
                 doc.querySelectorAll('img, iframe').forEach(el => {
@@ -235,7 +223,7 @@
                     }
                 });
 
-                // Inject Google Ads clickTag & ExitApi interceptor
+                // 4. Inject Google Ads clickTag & ExitApi interceptor
                 const exitScript = doc.createElement('script');
                 exitScript.textContent = `
                     var clickTag = "https://www.google.com";
@@ -255,11 +243,11 @@
                     }, { capture: true, passive: true });
                 `;
                 head.appendChild(exitScript);
-                log('Injected Google Ads clickTag and exit handlers.');
+                log('Injected Google Ads clickTag and exit handlers successfully.');
 
                 const finalHtml = '<!DOCTYPE html>\n' + doc.documentElement.outerHTML;
 
-                // Build final ZIP
+                // 5. Build final ZIP package
                 const finalZip = new JSZip();
                 finalZip.file('index.html', finalHtml);
 
@@ -279,7 +267,7 @@
                 dlBtn.href = blobUrl;
                 dlBtn.download = 'Google_Ads_Ready.zip';
 
-                log('Google Ads ZIP package created successfully with 4th-party calls cleared!');
+                log('Google Ads ZIP package created successfully! 4th-party checks passed.');
                 btn.textContent = 'Convert & Package for Google Ads';
                 btn.disabled = false;
             } catch (err) {

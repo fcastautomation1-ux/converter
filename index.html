@@ -13,7 +13,7 @@
     <div class="max-w-3xl mx-auto bg-white rounded-2xl shadow-xl overflow-hidden p-8">
         <header class="text-center mb-8">
             <h1 class="text-3xl font-bold text-slate-800">AppLovin to Google Ads Converter</h1>
-            <p class="text-slate-500 mt-2">Instantly extract, convert, and package your multi-file playable ads directly in your browser.</p>
+            <p class="text-slate-500 mt-2">Universal browser-based converter with full asset folder extraction.</p>
         </header>
 
         <!-- Upload Section -->
@@ -24,7 +24,7 @@
                     <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
                 </svg>
                 <p class="text-slate-600 font-medium">Drag & drop your AppLovin HTML file here, or <span class="text-indigo-600 underline">browse</span></p>
-                <p class="text-xs text-slate-400 mt-1">Supports multi-file Cocos bundles & embedded ZIPs</p>
+                <p class="text-xs text-slate-400 mt-1">Unpacks assets, cocos-js, src, and res folders automatically</p>
             </div>
             <div id="file-info" class="hidden text-indigo-600 font-semibold mt-2"></div>
         </div>
@@ -65,7 +65,7 @@
         </div>
     </div>
 
-    <!-- Client-Side Extraction & Conversion Script -->
+    <!-- Universal Client-Side Extractor Script -->
     <script>
         const dropZone = document.getElementById('drop-zone');
         const fileInput = document.getElementById('file-input');
@@ -108,75 +108,83 @@
 
         convertBtn.addEventListener('click', async () => {
             if (!selectedFile) return;
-            convertBtn.textContent = 'Extracting Assets & Packaging...';
+            convertBtn.textContent = 'Extracting Game Folders & Packaging...';
             convertBtn.disabled = true;
 
             try {
-                const fileText = await selectedFile.text();
+                const arrayBuffer = await selectedFile.arrayBuffer();
                 let extractedFiles = {};
-                let htmlContent = fileText;
-                let zipBuffer = null;
+                let htmlContent = new TextDecoder().decode(arrayBuffer);
 
-                // 1. Check if file is a direct ZIP archive
-                if (selectedFile.name.endsWith('.zip')) {
-                    zipBuffer = await selectedFile.arrayBuffer();
-                } else {
-                    // 2. Search for embedded base64 ZIP strings (window.__zip or UEsDB signatures)
-                    const patterns = [
-                        /window\.__zip\s*=\s*"([^"]+)"/,
-                        /window\.__zip\s*=\s*'([^']+)'/,
-                        /__zip\s*[:=]\s*"([^"]+)"/,
-                        /["'](UEsDB[A-Za-z0-9+/=]+)["\']/
-                    ];
-
-                    let base64Data = null;
-                    for (let pat of patterns) {
-                        const match = fileText.match(pat);
-                        if (match) {
-                            base64Data = match[1];
-                            break;
-                        }
-                    }
-
-                    if (!base64Data && fileText.includes('UEsDB')) {
-                        const pkIdx = fileText.indexOf('UEsDB');
-                        if (pkIdx !== -1) {
-                            const sub = fileText.substring(pkIdx);
-                            const endQuote = sub.search(/["'\s]/);
-                            base64Data = endQuote !== -1 ? sub.substring(0, endQuote) : sub;
-                        }
-                    }
-
-                    if (base64Data) {
-                        try {
-                            base64Data = base64Data.replace(/\\n/g, '').replace(/\\"/g, '"').trim();
-                            zipBuffer = base64ToArrayBuffer(base64Data);
-                        } catch (err) {
-                            console.log("Base64 decode fallback error:", err);
-                        }
-                    }
-                }
-
-                // 3. Unpack all internal game assets if zip buffer was found
-                if (zipBuffer) {
-                    try {
-                        const unzipped = await JSZip.loadAsync(zipBuffer);
-                        for (let filename of Object.keys(unzipped.files)) {
-                            const zipEntry = unzipped.files[filename];
-                            if (!zipEntry.dir) {
-                                const fileData = await zipEntry.async('arraybuffer');
-                                extractedFiles[filename] = fileData;
-                                if (filename.toLowerCase() === 'index.html') {
-                                    htmlContent = new TextDecoder().decode(fileData);
-                                }
+                // 1. Attempt direct ZIP unpack if file is a zip archive
+                try {
+                    const unzipped = await JSZip.loadAsync(arrayBuffer);
+                    for (let filename of Object.keys(unzipped.files)) {
+                        const entry = unzipped.files[filename];
+                        if (!entry.dir) {
+                            const data = await entry.async('arraybuffer');
+                            extractedFiles[filename] = data;
+                            if (filename.toLowerCase() === 'index.html') {
+                                htmlContent = new TextDecoder().decode(data);
                             }
                         }
-                    } catch (e) {
-                        console.log("Inner zip extraction notice:", e);
+                    }
+                } catch (e) {
+                    console.log("Not a direct zip container, scanning for embedded payloads...");
+                }
+
+                // 2. If no files extracted yet, scan for base64 'UEsDB' zip signatures or variables
+                if (Object.keys(extractedFiles).length === 0) {
+                    const text = htmlContent;
+                    const base64Regex = /(UEsDB[A-Za-z0-9+/=]{100,})/g;
+                    let match;
+                    let bestBase64 = null;
+                    let maxLen = 0;
+                    while ((match = base64Regex.exec(text)) !== null) {
+                        if (match[1].length > maxLen) {
+                            maxLen = match[1].length;
+                            bestBase64 = match[1];
+                        }
+                    }
+
+                    if (!bestBase64) {
+                        const patterns = [
+                            /window\.__zip\s*=\s*"([^"]+)"/,
+                            /window\.__zip\s*=\s*'([^']+)'/,
+                            /__zip\s*[:=]\s*"([^"]+)"/,
+                            /data:application\/zip;base64,([A-Za-z0-9+/=]+)/
+                        ];
+                        for (let pat of patterns) {
+                            const m = text.match(pat);
+                            if (m) {
+                                bestBase64 = m[1];
+                                break;
+                            }
+                        }
+                    }
+
+                    if (bestBase64) {
+                        try {
+                            const cleanB64 = bestBase64.replace(/\\n/g, '').replace(/\\"/g, '"').trim();
+                            const decodedBuffer = base64ToArrayBuffer(cleanB64);
+                            const unzippedInner = await JSZip.loadAsync(decodedBuffer);
+                            for (let filename of Object.keys(unzippedInner.files)) {
+                                const entry = unzippedInner.files[filename];
+                                if (!entry.dir) {
+                                    const data = await entry.async('arraybuffer');
+                                    extractedFiles[filename] = data;
+                                    if (filename.toLowerCase() === 'index.html') {
+                                        htmlContent = new TextDecoder().decode(data);
+                                    }
+                                }
+                            }
+                        } catch (err) {
+                            console.log("Embedded base64 decode failed:", err);
+                        }
                     }
                 }
 
-                // 4. Inject Google Ads clickTag & ExitApi interceptor into index.html
+                // 3. Inject Google Ads clickTag & ExitApi interceptor into index.html
                 const parser = new DOMParser();
                 const doc = parser.parseFromString(htmlContent, 'text/html');
                 
@@ -208,7 +216,7 @@
 
                 const finalHtml = '<!DOCTYPE html>\n' + doc.documentElement.outerHTML;
 
-                // 5. Build final Google Ads Ready ZIP with index.html AND all asset folders
+                // 4. Build final Google Ads Ready ZIP with index.html AND all unpacked game folders
                 const finalZip = new JSZip();
                 finalZip.file('index.html', finalHtml);
 

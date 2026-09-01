@@ -13,7 +13,7 @@
     <div class="max-w-3xl mx-auto bg-white rounded-2xl shadow-xl overflow-hidden p-8">
         <header class="text-center mb-8">
             <h1 class="text-3xl font-bold text-slate-800">AppLovin to Google Ads Converter</h1>
-            <p class="text-slate-500 mt-2">Browser-based converter with full multi-folder asset extraction.</p>
+            <p class="text-slate-500 mt-2">Browser-based converter with live debug tracking.</p>
         </header>
 
         <!-- Upload HTML File -->
@@ -46,10 +46,15 @@
             Convert & Package for Google Ads
         </button>
 
+        <!-- Live Debug Log Box -->
+        <div id="log-box" class="mt-6 p-4 bg-slate-900 text-emerald-400 font-mono text-xs rounded-xl h-44 overflow-y-auto hidden">
+            <div class="font-bold text-slate-400 mb-1">--- Live Extraction Logs ---</div>
+        </div>
+
         <!-- Results Section -->
         <div id="results-section" class="hidden mt-8 border-t border-slate-200 pt-6">
             <div class="p-4 rounded-xl mb-6 bg-emerald-50 text-emerald-700 font-medium text-center">
-                Conversion Completed Successfully! All Game Folders Included.
+                Conversion Completed Successfully!
             </div>
 
             <div class="grid grid-cols-3 gap-4 text-center mb-6">
@@ -77,10 +82,18 @@
         </div>
     </div>
 
-    <!-- Extraction Engine -->
+    <!-- Live Debug Extraction Engine -->
     <script>
         let htmlFile = null;
         let jsFile = null;
+
+        function log(message) {
+            const box = document.getElementById('log-box');
+            box.classList.remove('hidden');
+            box.innerHTML += `<div>[${new Date().toLocaleTimeString()}] ${message}</div>`;
+            box.scrollTop = box.scrollHeight;
+            console.log(message);
+        }
 
         const dropHtml = document.getElementById('drop-zone-html');
         const inputHtml = document.getElementById('file-html');
@@ -94,6 +107,7 @@
             infoHtml.classList.remove('hidden');
             infoHtml.textContent = `HTML: ${htmlFile.name} (${(htmlFile.size / (1024*1024)).toFixed(2)} MB)`;
             document.getElementById('convert-btn').disabled = false;
+            log(`File selected: ${htmlFile.name} (${htmlFile.size} bytes)`);
         });
 
         const dropJs = document.getElementById('drop-zone-js');
@@ -107,6 +121,7 @@
             labelJs.classList.add('hidden');
             infoJs.classList.remove('hidden');
             infoJs.textContent = `JS: ${jsFile.name}`;
+            log(`JS loader selected: ${jsFile.name}`);
         });
 
         function base64ToUint8Array(base64) {
@@ -120,66 +135,59 @@
             return bytes;
         }
 
-        function extractAppLovinPayload(jsContent) {
-            let start = jsContent.indexOf('al_renderHtml({"html":"');
-            if (start === -1) start = jsContent.indexOf("al_renderHtml({'html':'");
-            if (start === -1) return null;
-
-            let prefix = start === jsContent.indexOf('al_renderHtml({"html":"') ? 'al_renderHtml({"html":"' : "al_renderHtml({'html':'";
-            start += prefix.length;
-            let end = jsContent.indexOf('"})', start);
-            if (end === -1) end = jsContent.indexOf("'})", start);
-            if (end === -1) end = jsContent.lastIndexOf('"}');
-            if (end === -1) return null;
-
-            let payload = jsContent.substring(start, end);
-            return payload
-                .replace(/\\"/g, '"')
-                .replace(/\\'/g, "'")
-                .replace(/\\n/g, '\n')
-                .replace(/\\r/g, '\r')
-                .replace(/\\t/g, '\t')
-                .replace(/\\\//g, '/');
-        }
-
         async function parseZipFromBuffer(buffer) {
             let files = {};
             try {
                 const unzipped = await JSZip.loadAsync(buffer);
-                for (let fn of Object.keys(unzipped.files)) {
+                const keys = Object.keys(unzipped.files);
+                log(`JSZip successfully read buffer. Found ${keys.length} entries inside.`);
+                for (let fn of keys) {
                     const entry = unzipped.files[fn];
                     if (!entry.dir) {
                         files[fn] = await entry.async('arraybuffer');
+                        log(`Extracted file: ${fn}`);
                     }
                 }
-            } catch (e) {}
+            } catch (e) {
+                log(`JSZip parse error: ${e.message}`);
+            }
             return files;
         }
 
         document.getElementById('convert-btn').addEventListener('click', async () => {
             if (!htmlFile) return;
             const btn = document.getElementById('convert-btn');
-            btn.textContent = 'Unpacking Game Folders & Assets...';
+            btn.textContent = 'Processing...';
             btn.disabled = true;
+            document.getElementById('log-box').innerHTML = '<div class="font-bold text-slate-400 mb-1">--- Live Extraction Logs ---</div>';
 
             try {
                 let htmlText = await htmlFile.text();
                 let extractedFiles = {};
 
-                // 1. Process JS loader file if provided
                 if (jsFile) {
+                    log('Processing uploaded JS loader file...');
                     const jsText = await jsFile.text();
-                    const payload = extractAppLovinPayload(jsText);
-                    if (payload) htmlText = payload;
+                    let start = jsText.indexOf('al_renderHtml({"html":"');
+                    if (start !== -1) {
+                        start += 'al_renderHtml({"html":"'.length;
+                        let end = jsText.indexOf('"})', start);
+                        if (end !== -1) {
+                            htmlText = jsText.substring(start, end).replace(/\\"/g, '"').replace(/\\n/g, '\n').replace(/\\\//g, '/');
+                            log('Successfully extracted HTML from JS loader payload.');
+                        }
+                    }
                 }
 
                 const arrayBuffer = await htmlFile.arrayBuffer();
 
-                // 2. Method A: Try direct zip unpack
+                // Step 1: Try direct ZIP unpack
+                log('Attempting direct ZIP archive extraction...');
                 extractedFiles = await parseZipFromBuffer(arrayBuffer);
 
-                // 3. Method B: Search text for base64 zip variables (__zip, window.__zip, UEsDB)
+                // Step 2: Search text for window.__zip or base64 UEsDB strings
                 if (Object.keys(extractedFiles).length === 0) {
+                    log('No direct zip found. Scanning text for base64 zip strings (__zip / UEsDB)...');
                     const patterns = [
                         /window\.__zip\s*=\s*"([^"]+)"/,
                         /window\.__zip\s*=\s*'([^']+)'/,
@@ -193,6 +201,7 @@
                         const m = htmlText.match(pat);
                         if (m) {
                             b64Data = m[1];
+                            log(`Matched pattern variable containing base64 data.`);
                             break;
                         }
                     }
@@ -201,24 +210,28 @@
                         const matches = htmlText.match(/(UEsDB[A-Za-z0-9+/=]{100,})/g);
                         if (matches && matches.length > 0) {
                             b64Data = matches.reduce((a, b) => a.length > b.length ? a : b);
+                            log(`Found large UEsDB base64 signature string in text.`);
                         }
                     }
 
                     if (b64Data) {
                         try {
                             const decodedBytes = base64ToUint8Array(b64Data);
+                            log(`Base64 decoded successfully (${decodedBytes.length} bytes). Unzipping...`);
                             extractedFiles = await parseZipFromBuffer(decodedBytes);
                         } catch (err) {
-                            console.log("Base64 decode error:", err);
+                            log(`Base64 decode failed: ${err.message}`);
                         }
                     }
                 }
 
-                // 4. Method C: Binary PK\x03\x04 signature search
+                // Step 3: Binary PK\x03\x04 signature search
                 if (Object.keys(extractedFiles).length === 0) {
+                    log('Scanning binary buffer for PK\x03\x04 ZIP header signature...');
                     const bytes = new Uint8Array(arrayBuffer);
                     for (let i = 0; i < bytes.length - 3; i++) {
                         if (bytes[i] === 0x50 && bytes[i+1] === 0x4B && bytes[i+2] === 0x03 && bytes[i+3] === 0x04) {
+                            log(`Found PK ZIP header signature at offset ${i}. Slicing buffer...`);
                             const sliceBuf = arrayBuffer.slice(i);
                             extractedFiles = await parseZipFromBuffer(sliceBuf);
                             break;
@@ -226,12 +239,14 @@
                     }
                 }
 
-                // If index.html exists inside extracted files, use its text
+                log(`Total asset files extracted/found: ${Object.keys(extractedFiles).length}`);
+
                 if (extractedFiles['index.html']) {
                     htmlText = new TextDecoder().decode(extractedFiles['index.html']);
+                    log('Loaded index.html from extracted game assets.');
                 }
 
-                // 5. Inject Google Ads clickTag & ExitApi interceptor into index.html
+                // Inject Google Ads clickTag & ExitApi interceptor
                 const parser = new DOMParser();
                 const doc = parser.parseFromString(htmlText, 'text/html');
                 
@@ -263,7 +278,7 @@
 
                 const finalHtml = '<!DOCTYPE html>\n' + doc.documentElement.outerHTML;
 
-                // 6. Build final Google Ads Ready ZIP (index.html + all unpacked game folders)
+                // Build final ZIP
                 const finalZip = new JSZip();
                 finalZip.file('index.html', finalHtml);
 
@@ -283,9 +298,11 @@
                 dlBtn.href = blobUrl;
                 dlBtn.download = 'Google_Ads_Ready.zip';
 
+                log('Google Ads ZIP package created successfully!');
                 btn.textContent = 'Convert & Package for Google Ads';
                 btn.disabled = false;
             } catch (err) {
+                log(`CRITICAL ERROR: ${err.message}`);
                 alert('Conversion error: ' + err.message);
                 btn.textContent = 'Convert & Package for Google Ads';
                 btn.disabled = false;

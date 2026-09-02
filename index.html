@@ -124,7 +124,24 @@
 
         const sEnd = "</" + "script>";
 
-        // 1:1 Port: applovin_parser_2.py
+        // 1:1 Port of Python's validate_image() using Magic Numbers
+        function isValidImage(buffer, filename) {
+            const name = filename.toLowerCase();
+            if (buffer.length < 8) return false; // Too small to be an image
+
+            if (name.endsWith('.png')) {
+                // Real PNGs must start with: 89 50 4E 47
+                return buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4E && buffer[3] === 0x47;
+            }
+            
+            if (name.endsWith('.jpg') || name.endsWith('.jpeg')) {
+                // Real JPGs must start with: FF D8 FF
+                return buffer[0] === 0xFF && buffer[1] === 0xD8 && buffer[2] === 0xFF;
+            }
+            
+            return true; // Not an image, skip validation
+        }
+
         function extractAppLovinPayload(jsContent) {
             let start = jsContent.indexOf('al_renderHtml({"html":"');
             if (start === -1) return null;
@@ -136,7 +153,6 @@
             return payload;
         }
 
-        // 1:1 Port: applovin_exit_converter_2.py
         function convertApplovinExit(html) {
             html = html.replace(/mraid\.open\(/g, "exitAd(");
             html = html.replace(/super_open\(/g, "exitAd(");
@@ -176,7 +192,6 @@ ${sEnd}
             return html;
         }
 
-        // 1:1 Port: cocos_loader_converter_2.py
         function convertCocosLoader(html) {
             html = html.replace(/\.\/\.\.\/cocos-js\/cc\.js/g, "./cocos-js/cc.js");
             html = html.replace(/<script>\s*\(function\(global\)[\s\S]*?<\/script>/g, "");
@@ -215,7 +230,6 @@ ${sEnd}
             return html;
         }
 
-        // 1:1 Port: build_clean_cocos_html from converter_2.py
         const buildCleanCocosHtml = (resContent) => {
             return `<!DOCTYPE html>
 <html>
@@ -416,9 +430,6 @@ ${sEnd}
 
                     for (let fn of Object.keys(unzipped.files)) {
                         
-                        // ==========================================
-                        // FIX: Aggressive Corrupt/Hidden File Filter 
-                        // ==========================================
                         const fileName = fn.split('/').pop();
                         
                         // 1. Filter out hidden MacOS files, AppleDouble Resource Forks, and Windows thumbs
@@ -436,10 +447,21 @@ ${sEnd}
                         
                         let buffer = await entry.async("uint8array");
                         
-                        // 2. Filter out 0-byte ghost files which Google Ads rejects as "Invalid Images"
+                        // 2. Filter out 0-byte ghost files
                         if (buffer.length === 0) {
                             filteredCount++;
                             continue;
+                        }
+
+                        // ==========================================
+                        // FIX: Python Image Verification Port
+                        // ==========================================
+                        if (fileName.toLowerCase().match(/\.(png|jpe?g)$/)) {
+                            if (!isValidImage(buffer, fileName)) {
+                                log(`Skipping invalid image (Failed Magic Number Check): ${fileName}`);
+                                filteredCount++;
+                                continue;
+                            }
                         }
 
                         extractedCount++;
@@ -473,7 +495,7 @@ ${sEnd}
                         }
                     }
                     
-                    log(`Extracted ${extractedCount} embedded files into memory. (Filtered ${filteredCount} junk system files)`);
+                    log(`Extracted ${extractedCount} embedded files into memory. (Filtered ${filteredCount} junk/corrupt files)`);
 
                     let resJsonString = JSON.stringify(resources);
                     resJsonString = resJsonString.replace(/<\/script/gi, "<\\/script")
@@ -522,7 +544,7 @@ ${sEnd}
                 dlBtn.href = blobUrl;
                 dlBtn.download = 'Google_Ads_Ready.zip';
 
-                log('Google Ads ZIP package created successfully (Filtered JUNK Files)!');
+                log('Google Ads ZIP package created successfully (Filtered JUNK Files & Validated Images)!');
                 btn.textContent = 'Convert & Package for Google Ads';
                 btn.disabled = false;
             } catch (err) {

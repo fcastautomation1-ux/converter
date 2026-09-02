@@ -13,7 +13,7 @@
     <div class="max-w-3xl mx-auto bg-white rounded-2xl shadow-xl overflow-hidden p-8">
         <header class="text-center mb-8">
             <h1 class="text-3xl font-bold text-slate-800">Playable Ad to Google Ads Converter</h1>
-            <p class="text-slate-500 mt-2">1:1 Port of Python Backend. Strict UTF-8 & Corrupt Image Filtering.</p>
+            <p class="text-slate-500 mt-2">1:1 Port of Python Backend. Auto-Fetches External JS Payloads.</p>
         </header>
 
         <!-- Main Upload Box -->
@@ -23,6 +23,7 @@
                 <input type="file" id="file-html" accept=".html,.zip,.txt" class="hidden">
                 <div id="label-html">
                     <p class="text-slate-600 font-medium">Drag & drop your .html or .zip file here, or <span class="text-indigo-600 underline">browse</span></p>
+                    <p class="text-xs text-slate-400 mt-2">(We will automatically find and fetch external JS payloads if needed!)</p>
                 </div>
                 <div id="info-html" class="hidden text-indigo-600 font-semibold"></div>
             </div>
@@ -30,11 +31,11 @@
 
         <!-- Optional JS Upload Box -->
         <div class="mb-6">
-            <label class="block text-sm font-medium text-slate-700 mb-2">Upload Companion JS Loader File <span class="text-slate-400 font-normal">(Optional)</span></label>
+            <label class="block text-sm font-medium text-slate-700 mb-2">Manual Companion JS File <span class="text-slate-400 font-normal">(Only needed if Auto-Fetch fails)</span></label>
             <div class="border-2 border-dashed border-slate-300 rounded-xl p-6 text-center hover:border-indigo-500 transition cursor-pointer bg-slate-50" id="drop-zone-js">
                 <input type="file" id="file-js" accept=".js,.txt" class="hidden">
                 <div id="label-js">
-                    <p class="text-slate-600 font-medium">Drag & drop optional JS loader here, or <span class="text-indigo-600 underline">browse</span></p>
+                    <p class="text-slate-600 font-medium">Drag & drop manual JS loader here, or <span class="text-indigo-600 underline">browse</span></p>
                 </div>
                 <div id="info-js" class="hidden text-indigo-600 font-semibold"></div>
             </div>
@@ -119,7 +120,7 @@
             labelDivJs.classList.add('hidden');
             infoDivJs.classList.remove('hidden');
             infoDivJs.textContent = `JS File: ${jsFile.name}`;
-            log(`Optional JS file selected: ${jsFile.name}`);
+            log(`Manual JS file selected: ${jsFile.name}`);
         });
 
         const sEnd = "</" + "script>";
@@ -155,7 +156,6 @@
             }
         }
 
-        // FIXED: Safe JSON Parsing to prevent code corruption
         function extractAppLovinPayload(jsContent) {
             let start = jsContent.indexOf('al_renderHtml(');
             if (start === -1) return null;
@@ -164,7 +164,6 @@
             if (firstBrace !== -1 && lastBrace !== -1) {
                 let jsonStr = jsContent.substring(firstBrace, lastBrace + 1);
                 try {
-                    // Safe parsing prevents internal JS strings from being unescaped into fatal syntax errors
                     let obj = JSON.parse(jsonStr);
                     if (obj && obj.html) return obj.html;
                 } catch (e) {
@@ -193,7 +192,6 @@ function exitAd(url){
     }
 }
 
-// FULL MRAID MOCK API
 window.mraid = window.mraid || {
     addEventListener: function () {},
     removeEventListener: function () {},
@@ -402,22 +400,10 @@ ${sEnd}
 </html>`;
         };
 
-        function base64ToUint8Array(base64) {
-            base64 = base64.replace(/[^A-Za-z0-9+/=]/g, "");
-            while (base64.length % 4 !== 0) base64 += '=';
-            const binaryString = window.atob(base64);
-            const len = binaryString.length;
-            const bytes = new Uint8Array(len);
-            for (let i = 0; i < len; i++) {
-                bytes[i] = binaryString.charCodeAt(i);
-            }
-            return bytes;
-        }
-
         document.getElementById('convert-btn').addEventListener('click', async () => {
             if (!uploadedFile) return;
             const btn = document.getElementById('convert-btn');
-            btn.textContent = 'Executing Python Logic Port...';
+            btn.textContent = 'Processing...';
             btn.disabled = true;
             document.getElementById('log-box').innerHTML = '<div class="font-bold text-slate-400 mb-1">--- Live Processing Logs ---</div>';
 
@@ -426,21 +412,59 @@ ${sEnd}
                 const arrayBuffer = await uploadedFile.arrayBuffer();
                 htmlText = new TextDecoder().decode(arrayBuffer);
 
-                // 1. Check for AppLovin payload (SAFELY PARSED)
+                let payload = null;
+
+                // 1. AppLovin & External JS Auto-Fetch Logic
                 if (jsFile) {
-                    log("Processing optional companion JS file...");
+                    log("Processing manually uploaded companion JS file...");
                     const jsContent = await jsFile.text();
-                    let payload = extractAppLovinPayload(jsContent);
-                    if (payload) {
-                        htmlText = payload;
-                        log("Extracted AppLovin payload from JS file safely.");
-                    }
+                    payload = extractAppLovinPayload(jsContent);
+                    if (payload) log("Extracted payload from manual JS file.");
                 } else {
-                    let payload = extractAppLovinPayload(htmlText);
+                    // Try to extract from the HTML first
+                    payload = extractAppLovinPayload(htmlText);
                     if (payload) {
-                        htmlText = payload;
-                        log("Extracted AppLovin payload from HTML file safely.");
+                        log("Extracted embedded payload directly from HTML file.");
+                    } else {
+                        // If not in HTML, search for external .js links
+                        const scriptRegex = /<script[^>]+src=["'](https?:\/\/[^"']+\.js(\?[^"']*)?)["'][^>]*>/gi;
+                        let match;
+                        let externalJsUrls = [];
+                        
+                        while ((match = scriptRegex.exec(htmlText)) !== null) {
+                            // ignore google ads / exitapi links
+                            if (!match[1].includes('exitapi.js')) {
+                                externalJsUrls.push(match[1]);
+                            }
+                        }
+                        
+                        if (externalJsUrls.length > 0) {
+                            log(`Detected ${externalJsUrls.length} external JS link(s). Attempting to auto-fetch...`);
+                            for (let url of externalJsUrls) {
+                                try {
+                                    log(`Fetching: ${url}`);
+                                    const response = await fetch(url);
+                                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                                    const fetchedJs = await response.text();
+                                    
+                                    payload = extractAppLovinPayload(fetchedJs);
+                                    if (payload) {
+                                        log(`SUCCESS: Extracted payload from auto-fetched JS!`);
+                                        break; 
+                                    }
+                                } catch (e) {
+                                    log(`Fetch failed for ${url} (Likely blocked by browser CORS policy).`);
+                                }
+                            }
+                            if(!payload) {
+                                log("Auto-fetch completed but no payload found. If the ad is broken, please download the .js file manually and use the companion uploader.");
+                            }
+                        }
                     }
+                }
+
+                if (payload) {
+                    htmlText = payload;
                 }
 
                 // 2. Check for Embedded ZIP
@@ -491,7 +515,7 @@ ${sEnd}
                         let isFakeImage = false;
                         if (fileName.toLowerCase().match(/\.(png|jpe?g)$/)) {
                             if (!isValidImage(buffer, fileName)) {
-                                log(`Soft-skipping invalid image: ${fileName}. Kept in memory payload, removed from ZIP.`);
+                                log(`Soft-skipping invalid image: ${fileName}.`);
                                 isFakeImage = true; 
                                 filteredCount++;
                             }
@@ -552,8 +576,7 @@ ${sEnd}
                     htmlText = convertApplovinExit(htmlText);
                     htmlText = convertCocosLoader(htmlText);
 
-                    // FIXED: Safe External Script Stripping
-                    // DOMParser modifies internal scripts unpredictably. We use Regex to cleanly remove external URLs instead.
+                    // Safe External Script Stripping using Regex
                     htmlText = htmlText.replace(/<script[^>]*src=["'](http[^"']+)["'][^>]*>.*?<\/script>/gi, (match, url) => {
                         if (url.includes('exitapi.js') || url.includes('fonts.googleapis.com')) return match;
                         return '';
@@ -585,7 +608,7 @@ ${sEnd}
                 dlBtn.href = blobUrl;
                 dlBtn.download = 'Google_Ads_Ready.zip';
 
-                log('Google Ads ZIP package created successfully (Filtered JUNK Files & Safely Mocked)!');
+                log('Google Ads ZIP package created successfully!');
                 btn.textContent = 'Convert & Package for Google Ads';
                 btn.disabled = false;
             } catch (err) {

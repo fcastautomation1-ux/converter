@@ -13,7 +13,7 @@
     <div class="max-w-3xl mx-auto bg-white rounded-2xl shadow-xl overflow-hidden p-8">
         <header class="text-center mb-8">
             <h1 class="text-3xl font-bold text-slate-800">Playable Ad to Google Ads Converter</h1>
-            <p class="text-slate-500 mt-2">Fully mirrors Python backend for both Cocos bundles and AppLovin HTML files.</p>
+            <p class="text-slate-500 mt-2">Decodes embedded __zip base64 payloads and forces global ExitApi routing.</p>
         </header>
 
         <!-- Upload Box -->
@@ -23,7 +23,7 @@
                 <input type="file" id="file-html" accept=".html,.zip,.txt" class="hidden">
                 <div id="label-html">
                     <p class="text-slate-600 font-medium">Drag & drop your .html or .zip file here, or <span class="text-indigo-600 underline">browse</span></p>
-                    <p class="text-xs text-slate-400 mt-1">Safely constructs __res dictionary and injects ExitApi</p>
+                    <p class="text-xs text-slate-400 mt-1">Safely constructs __res dictionary and bypasses CORS</p>
                 </div>
                 <div id="info-html" class="hidden text-indigo-600 font-semibold"></div>
             </div>
@@ -70,6 +70,7 @@
         </div>
     </div>
 
+    <!-- Python-to-JS Ported Engine -->
     <script>
         let uploadedFile = null;
 
@@ -357,7 +358,7 @@
                     log("Injected super_eval and Google Ads interceptors.");
 
                 } else {
-                    // ======= STANDARD HTML FALLBACK BLOCK (RESTORED EXIT API INJECTION) =======
+                    // ======= STANDARD HTML FALLBACK BLOCK =======
                     log("No embedded ZIP detected. Rebuilding standard HTML payload...");
                     
                     const parser = new DOMParser();
@@ -384,50 +385,42 @@
                     exitApiScript.src = 'https://tpc.googlesyndication.com/pagead/gadgets/html5/api/exitapi.js';
                     head.insertBefore(exitApiScript, head.firstChild);
 
-                    // 2. Inject clickTag and exitAd function
+                    // 2. Inject clickTag and exitAd function globally
                     const exitScript = doc.createElement('script');
                     exitScript.textContent = `
                         var clickTag = "https://www.google.com";
                         
-                        function exitAd(url){
+                        window.exitAd = function(url){
                             if (typeof ExitApi !== 'undefined' && ExitApi.exit) {
                                 ExitApi.exit();
                             } else {
                                 var target = url || clickTag;
                                 if(target) { window.open(target, "_blank"); }
                             }
-                        }
+                        };
 
                         var originalWindowOpen = window.open;
                         window.open = function(url, target, features) {
-                            exitAd(url);
+                            window.exitAd(url);
                         };
 
-                        window.mraid = window.mraid || {
-                            open: function(url) { exitAd(url); }
-                        };
-
-                        document.addEventListener('click', function(e) {
-                            var target = e.target.closest('a, button, .cta, .button, [id*="cta"], [class*="cta"], [id*="play"], [class*="play"]');
-                            if (target || (e.clientX > window.innerWidth - 150 && e.clientY > window.innerHeight - 80)) {
-                                exitAd();
-                            }
-                        }, { capture: true, passive: true });
+                        window.mraid = window.mraid || {};
+                        window.mraid.open = function(url) { window.exitAd(url); };
                     `;
                     head.appendChild(exitScript);
 
-                    // 3. Replace old mraid/super calls matching applovin_exit_converter.py
-                    doc.querySelectorAll('script:not([src])').forEach(script => {
-                        let code = script.textContent;
-                        if (code.includes('mraid.open') || code.includes('super_open')) {
-                            code = code.replace(/mraid\.open\(/g, "exitAd(");
-                            code = code.replace(/super_open\(/g, "exitAd(");
-                            script.textContent = code;
-                        }
-                    });
-
+                    // 3. Serialize DOM back to string
                     htmlText = '<!DOCTYPE html>\n' + doc.documentElement.outerHTML;
-                    log("Injected Google Ads ExitApi handlers for standard HTML.");
+
+                    // 4. GLOBAL STRING REPLACEMENT: Mimics Python backend exactly to catch inline <div onclick="mraid.open()"> calls
+                    htmlText = htmlText.replace(/mraid\.open\(/g, "exitAd(");
+                    htmlText = htmlText.replace(/super_open\(/g, "exitAd(");
+                    
+                    // Add safety replacements for navigation-based exits
+                    htmlText = htmlText.replace(/window\.location\.href\s*=\s*[^;>]+/gi, "exitAd();");
+                    htmlText = htmlText.replace(/location\.href\s*=\s*[^;>]+/gi, "exitAd();");
+
+                    log("Injected Google Ads ExitApi handlers and applied global string overrides.");
                 }
 
                 // Add index.html to final ZIP

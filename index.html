@@ -415,6 +415,10 @@ ${sEnd}
                     let extractedCount = 0;
 
                     for (let fn of Object.keys(unzipped.files)) {
+                        
+                        // FIX: Filter out hidden system files to prevent validation errors
+                        if (fn.includes('.DS_Store') || fn.includes('__MACOSX')) continue;
+
                         const entry = unzipped.files[fn];
                         if (entry.dir) continue;
                         
@@ -488,7 +492,16 @@ ${sEnd}
                 // Add index.html to final ZIP
                 finalZip.file('index.html', htmlText);
 
-                const content = await finalZip.generateAsync({ type: 'blob' });
+                // FIX: JSZip compression output, ensuring DEFLATE Level 9 and proper Blob mapping via Uint8Array
+                const contentUint8 = await finalZip.generateAsync({
+                    type: 'uint8array',
+                    compression: 'DEFLATE',
+                    compressionOptions: {
+                        level: 9
+                    }
+                });
+                
+                const content = new Blob([contentUint8], { type: 'application/zip' });
                 const blobUrl = URL.createObjectURL(content);
 
                 document.getElementById('package-size').textContent = `${(content.size / 1024).toFixed(2)} KB`;
@@ -498,7 +511,7 @@ ${sEnd}
                 dlBtn.href = blobUrl;
                 dlBtn.download = 'Google_Ads_Ready.zip';
 
-                log('Google Ads ZIP package created successfully!');
+                log('Google Ads ZIP package created successfully (DEFLATE compressed)!');
                 btn.textContent = 'Convert & Package for Google Ads';
                 btn.disabled = false;
             } catch (err) {

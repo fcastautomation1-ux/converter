@@ -13,7 +13,7 @@
     <div class="max-w-3xl mx-auto bg-white rounded-2xl shadow-xl overflow-hidden p-8">
         <header class="text-center mb-8">
             <h1 class="text-3xl font-bold text-slate-800">Playable Ad to Google Ads Converter</h1>
-            <p class="text-slate-500 mt-2">1:1 Python Backend Port with Strict UTF-8 Failsafes</p>
+            <p class="text-slate-500 mt-2">1:1 Port of Python Backend. Strict UTF-8 Failsafes & Global Exit Routing.</p>
         </header>
 
         <!-- Main Upload Box -->
@@ -81,7 +81,6 @@
         </div>
     </div>
 
-    <!-- Python-to-JS Ported Engine -->
     <script>
         let uploadedFile = null;
         let jsFile = null;
@@ -123,7 +122,9 @@
             log(`Optional JS file selected: ${jsFile.name}`);
         });
 
-        // 1:1 Implementation of applovin_parser_2.py
+        const sEnd = "</" + "script>";
+
+        // 1:1 Port: applovin_parser_2.py
         function extractAppLovinPayload(jsContent) {
             let start = jsContent.indexOf('al_renderHtml({"html":"');
             if (start === -1) return null;
@@ -135,16 +136,17 @@
             return payload;
         }
 
-        // 1:1 Implementation of applovin_exit_converter_2.py + Google Ads requirements
+        // 1:1 Port: applovin_exit_converter_2.py
         function convertApplovinExit(html) {
             html = html.replace(/mraid\.open\(/g, "exitAd(");
             html = html.replace(/super_open\(/g, "exitAd(");
 
-            const sEnd = "</" + "script>";
-            const exit_script = `
+            const exitScript = `
+<!-- Google Ads Official Exit API Script -->
 <script type="text/javascript" src="https://tpc.googlesyndication.com/pagead/gadgets/html5/api/exitapi.js">${sEnd}
 <script>
-var clickTag = "";
+var clickTag = "https://www.google.com";
+
 function exitAd(url){
     var target = url || clickTag;
     if (typeof ExitApi !== 'undefined' && ExitApi.exit) {
@@ -153,58 +155,79 @@ function exitAd(url){
         window.open(target, "_blank");
     }
 }
+window.mraid = window.mraid || {};
+window.mraid.open = function(url) { exitAd(url); };
+var originalWindowOpen = window.open;
+window.open = function(url, target, features) { exitAd(url); };
+
+document.addEventListener('click', function(e) {
+    var target = e.target.closest('a, button, .cta, .button, [id*="cta"], [class*="cta"], [id*="play"], [class*="play"]');
+    if (target || (e.clientX > window.innerWidth - 150 && e.clientY > window.innerHeight - 80)) {
+        exitAd();
+    }
+}, { capture: true, passive: true });
 ${sEnd}
 `;
-            if (html.indexOf("</head>") !== -1) {
-                html = html.replace("</head>", exit_script + "</head>");
+            if (html.includes("</head>")) {
+                html = html.replace("</head>", exitScript + "</head>");
             } else {
-                html = exit_script + html;
+                html = exitScript + html;
             }
             return html;
         }
 
-        // 1:1 Implementation of build_clean_cocos_html from converter_2.py
+        // 1:1 Port: cocos_loader_converter_2.py
+        function convertCocosLoader(html) {
+            html = html.replace(/\.\/\.\.\/cocos-js\/cc\.js/g, "./cocos-js/cc.js");
+            html = html.replace(/<script>\s*\(function\(global\)[\s\S]*?<\/script>/g, "");
+
+            const placeholders = [
+                "/* COCOS_SYSTEM_JS_PLACEHOLDER */",
+                "/* COCOS_INDEX_JS_PLACEHOLDER */",
+                "<!-- COCOS_RUNTIME_PLACEHOLDER -->",
+                "<!-- COCOS_BOOT_PLACEHOLDER -->"
+            ];
+            for (let ph of placeholders) {
+                html = html.split(ph).join("");
+            }
+
+            html = html.replace(/<script[^>]*src=["'](?:\.\/)?index\.js["'][^>]*><\/script>/gi, "");
+
+            const runtime_placeholder = "\n<!-- COCOS_RUNTIME_PLACEHOLDER -->\n";
+            const boot_placeholder = `\n<script>\n(function () {\n    function bootCocos() {\n        if (!window.System || !System.import) {\n            console.error("COCOS BOOT FAILED", "SystemJS is not available");\n            return;\n        }\n        System.import("./index.js").then(function () {\n            console.log("COCOS BOOT OK");\n        }).catch(function (error) {\n            console.error("COCOS BOOT FAILED", error);\n        });\n    }\n    bootCocos();\n})();\n${sEnd}\n`;
+
+            if (html.includes("systemjs-importmap")) {
+                html = html.replace('<script type="systemjs-importmap">', runtime_placeholder + '\n<script type="systemjs-importmap">');
+            } else {
+                const fallback_import_map = `\n<script type="systemjs-importmap">\n{\n    "imports": {\n        "cc": "./cocos-js/cc.js"\n    }\n}\n${sEnd}\n`;
+                if (html.includes("</head>")) {
+                    html = html.replace("</head>", runtime_placeholder + fallback_import_map + "\n</head>");
+                } else {
+                    html = runtime_placeholder + fallback_import_map + html;
+                }
+            }
+
+            if (html.includes("</body>")) {
+                html = html.replace("</body>", boot_placeholder + "\n</body>");
+            } else {
+                html += "\n" + boot_placeholder;
+            }
+            return html;
+        }
+
+        // 1:1 Port: build_clean_cocos_html from converter_2.py
         const buildCleanCocosHtml = (resContent) => {
-            const sEnd = "</" + "script>";
             return `<!DOCTYPE html>
 <html>
 <head>
     <meta charset="utf-8">
     <meta name="ad.size" content="width=320,height=480">
     <title>Playable Ad</title>
-
-    <meta
-        name="viewport"
-        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
-    >
-
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <style>
-        html,
-        body {
-            margin: 0;
-            padding: 0;
-            width: 100%;
-            height: 100%;
-            overflow: hidden;
-            background: #000000;
-        }
-
-        #GameDiv {
-            position: absolute;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            overflow: hidden;
-        }
-
-        #GameCanvas {
-            width: 100%;
-            height: 100%;
-            display: block;
-            outline: none;
-            touch-action: none;
-        }
+        html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #000000; }
+        #GameDiv { position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: hidden; }
+        #GameCanvas { width: 100%; height: 100%; display: block; outline: none; touch-action: none; }
     </style>
 
     <!-- Google Ads Official Exit API Script -->
@@ -213,7 +236,6 @@ ${sEnd}
 <script type="text/javascript">
     window.clickTag = "https://www.google.com";
 
-    // 1. Intercept standard window.open (Catches 90% of direct game exits)
     var originalWindowOpen = window.open;
     window.open = function(url, target, features) {
         if (typeof ExitApi !== "undefined") {
@@ -223,12 +245,10 @@ ${sEnd}
         }
     };
 
-    // 2. Setup standard exit function to funnel everything through our interceptor
     window.exitAd = function () {
         window.open(window.clickTag, "_blank"); 
     };
 
-    // 3. Mock MRAID (Catches ad-network exits)
     window.mraid = window.mraid || {
         addEventListener: function () {},
         removeEventListener: function () {},
@@ -238,7 +258,6 @@ ${sEnd}
         close: function () {}
     };
 
-    // 4. Mock Cocos super_html (Catches Cocos-specific exits)
     window.super_html = window.super_html || {};
     window.super_html.download = window.exitAd;
 
@@ -264,10 +283,7 @@ ${sEnd}
 
         if (!code) {
             for (var candidate in resources) {
-                if (
-                    url.indexOf(candidate) !== -1
-                    && url.indexOf(candidate) + candidate.length === url.length
-                ) {
+                if (url.indexOf(candidate) !== -1 && url.indexOf(candidate) + candidate.length === url.length) {
                     key = candidate;
                     code = resources[candidate];
                     break;
@@ -281,12 +297,8 @@ ${sEnd}
         }
 
         code = String(code);
-
-        // Forcefully override location changes just in case they used window.location.href
         code = code.replace(/window\\.location\\.href\\s*=\\s*[^;]+;/gi, "window.exitAd();");
         code = code.replace(/location\\.href\\s*=\\s*[^;]+;/gi, "window.exitAd();");
-        
-        // Strip parameters from known exit calls to prevent reference errors
         code = code.replace(/super_html\\.download\\s*\\([^)]*\\)/gi, "window.exitAd()");
         code = code.replace(/window\\.super_html\\.download\\s*\\([^)]*\\)/gi, "window.exitAd()");
         code = code.replace(/mraid\\.open\\s*\\([^)]*\\)/gi, "window.exitAd()");
@@ -294,7 +306,6 @@ ${sEnd}
         eval(code);
         delete resources[key];
     }
-
     window.super_eval = super_eval;
     ${sEnd}
 
@@ -315,51 +326,25 @@ ${sEnd}
 
     <script src="./@src/cc.adapter.js">${sEnd}
 </head>
-
 <body>
     <div id="GameDiv" cc_exact_fit_screen="true">
-        <canvas
-            id="GameCanvas"
-            oncontextmenu="event.preventDefault()"
-            tabindex="99"
-        ></canvas>
+        <canvas id="GameCanvas" oncontextmenu="event.preventDefault()" tabindex="99"></canvas>
     </div>
-
     <script>
         (function () {
-
             function startPlayable() {
-
                 if (typeof window.super_boot_engine === "function") {
-
                     window.super_boot_engine();
-
-                    console.log(
-                        "COCOS BOOT OK"
-                    );
-
+                    console.log("COCOS BOOT OK");
                 } else {
-
-                    console.error(
-                        "COCOS BOOT FAILED",
-                        "super_boot_engine is not available"
-                    );
+                    console.error("COCOS BOOT FAILED", "super_boot_engine is not available");
                 }
             }
-
-
             if (document.readyState === "loading") {
-
-                document.addEventListener(
-                    "DOMContentLoaded",
-                    startPlayable
-                );
-
+                document.addEventListener("DOMContentLoaded", startPlayable);
             } else {
-
                 startPlayable();
             }
-
         })();
     ${sEnd}
 </body>
@@ -381,7 +366,7 @@ ${sEnd}
         document.getElementById('convert-btn').addEventListener('click', async () => {
             if (!uploadedFile) return;
             const btn = document.getElementById('convert-btn');
-            btn.textContent = 'Decoding Base64 & Processing...';
+            btn.textContent = 'Executing Python Logic Port...';
             btn.disabled = true;
             document.getElementById('log-box').innerHTML = '<div class="font-bold text-slate-400 mb-1">--- Live Processing Logs ---</div>';
 
@@ -390,7 +375,7 @@ ${sEnd}
                 const arrayBuffer = await uploadedFile.arrayBuffer();
                 htmlText = new TextDecoder().decode(arrayBuffer);
 
-                // Extract Payload
+                // 1. Check for AppLovin payload
                 if (jsFile) {
                     log("Processing optional companion JS file...");
                     const jsContent = await jsFile.text();
@@ -407,32 +392,21 @@ ${sEnd}
                     }
                 }
 
+                // 2. Check for Embedded ZIP (1:1 port of embedded_zip_extractor.py)
                 let zipData = null;
-                let zipStartIdx = htmlText.indexOf('__zip');
-                if (zipStartIdx !== -1) {
-                    let eqIdx = htmlText.indexOf('=', zipStartIdx);
-                    if (eqIdx !== -1) {
-                        let quote1 = htmlText.indexOf('"', eqIdx);
-                        let quote2 = htmlText.indexOf("'", eqIdx);
-                        let quoteChar = null;
-                        let startIdx = -1;
-                        if (quote1 !== -1 && (quote2 === -1 || quote1 < quote2)) { quoteChar = '"'; startIdx = quote1; } 
-                        else if (quote2 !== -1) { quoteChar = "'"; startIdx = quote2; }
-                        
-                        if (startIdx !== -1 && startIdx < zipStartIdx + 30) {
-                            let endIdx = htmlText.indexOf(quoteChar, startIdx + 1);
-                            if (endIdx !== -1) {
-                                zipData = htmlText.substring(startIdx + 1, endIdx);
-                                zipData = zipData.replace(/\\n/g, "").replace(/\\"/g, '"');
-                            }
-                        }
-                    }
+                let zipMatch = htmlText.match(/window\.__zip\s*=\s*"([^"]+)"/);
+                if (!zipMatch) zipMatch = htmlText.match(/window\.__zip\s*=\s*'([^']+)'/);
+                if (!zipMatch) zipMatch = htmlText.match(/__zip\s*[:=]\s*"([^"]+)"/);
+
+                if (zipMatch) {
+                    zipData = zipMatch[1].replace(/\\n/g, "").replace(/\\"/g, '"');
                 }
                 
                 const finalZip = new JSZip();
 
                 if (zipData) {
-                    log("Detected embedded base64 ZIP (__zip). Unpacking virtual engine...");
+                    // ====== PATH A: BASE64 __ZIP DETECTED (Mirrors converter_2.py) ======
+                    log("Detected embedded base64 ZIP (__zip). Decoding and parsing assets...");
                     
                     const binaryData = base64ToUint8Array(zipData);
                     const unzipped = await JSZip.loadAsync(binaryData);
@@ -440,24 +414,13 @@ ${sEnd}
                     let resources = {};
                     let extractedCount = 0;
 
-                    let rootPrefix = "";
-                    let keys = Object.keys(unzipped.files);
-                    let indexPath = keys.find(k => k.toLowerCase().endsWith('index.html'));
-                    if (indexPath && indexPath !== 'index.html') {
-                        rootPrefix = indexPath.substring(0, indexPath.lastIndexOf('index.html'));
-                    }
-
-                    // 1:1 Implementation of Python's read_embedded_resources
-                    for (let fn of keys) {
+                    for (let fn of Object.keys(unzipped.files)) {
                         const entry = unzipped.files[fn];
                         if (entry.dir) continue;
                         
-                        let cleanName = fn;
-                        if (rootPrefix && fn.startsWith(rootPrefix)) {
-                            cleanName = fn.substring(rootPrefix.length);
-                        }
+                        extractedCount++;
 
-                        if (cleanName === '__res') {
+                        if (fn === '__res') {
                             const resText = await entry.async('text');
                             try { Object.assign(resources, JSON.parse(resText)); } catch(e) {}
                             continue;
@@ -466,7 +429,7 @@ ${sEnd}
                         let buffer = await entry.async("uint8array");
                         let textContent = null;
 
-                        // STRCIT UTF-8 FALLBACK (Fixes the blank page issue by matching Python)
+                        // STRICT UTF-8 FALLBACK (Mirrors Python's encoding="utf-8" vs "rb")
                         try {
                             let textDecoder = new TextDecoder('utf-8', {fatal: true});
                             textContent = textDecoder.decode(buffer);
@@ -475,34 +438,51 @@ ${sEnd}
                         }
 
                         if (textContent !== null) {
-                            if (cleanName.endsWith('cc.adapter.js')) {
+                            if (fn.endsWith('cc.adapter.js')) {
                                 if (!textContent.trim().startsWith('(function')) {
                                     textContent = "(function () {\n" + textContent + "\n})();\n";
                                 }
                             }
-                            resources[cleanName] = textContent;
-                            finalZip.file(cleanName, textContent);
+                            resources[fn] = textContent;
+                            finalZip.file(fn, textContent);
                         } else {
                             let base64Content = await entry.async('base64');
-                            resources[cleanName] = "data:application/octet-stream;base64," + base64Content;
-                            finalZip.file(cleanName, buffer);
+                            resources[fn] = "data:application/octet-stream;base64," + base64Content;
+                            finalZip.file(fn, buffer);
                         }
-                        extractedCount++;
                     }
                     
-                    log(`Processed ${extractedCount} resources. Injecting runtime template...`);
+                    log(`Extracted ${extractedCount} embedded files into memory.`);
 
-                    // 1:1 Implementation of safe_inline_script_text
+                    // Mirror Python's safe_inline_script_text
                     let resJsonString = JSON.stringify(resources);
-                    resJsonString = resJsonString.replace(/<\/script/gi, "<\\/script");
-                    resJsonString = resJsonString.replace(/<!--/g, "<\\!--");
-                    resJsonString = resJsonString.replace(/\u2028/g, "\\u2028");
-                    resJsonString = resJsonString.replace(/\u2029/g, "\\u2029");
+                    resJsonString = resJsonString.replace(/<\/script/gi, "<\\/script")
+                                                 .replace(/<!--/g, "<\\!--")
+                                                 .replace(/\u2028/g, "\\u2028")
+                                                 .replace(/\u2029/g, "\\u2029");
 
                     htmlText = buildCleanCocosHtml(resJsonString);
+                    log("Built clean Cocos HTML with Python super_eval injected.");
+
                 } else {
-                    log("No ZIP found. Applying AppLovin HTML string replacements...");
+                    // ====== PATH B: STANDARD HTML (Mirrors applovin_exit_converter_2.py & cocos_loader_converter_2.py) ======
+                    log("No embedded ZIP detected. Applying raw string replacements on HTML...");
+                    
                     htmlText = convertApplovinExit(htmlText);
+                    htmlText = convertCocosLoader(htmlText);
+
+                    // 1:1 Port of html_processor.py -> Scrub 4th party external links
+                    let parser = new DOMParser();
+                    let doc = parser.parseFromString(htmlText, 'text/html');
+                    doc.querySelectorAll('script[src], link[href], iframe').forEach(tag => {
+                        let url = tag.getAttribute(tag.tagName === 'LINK' ? 'href' : 'src') || '';
+                        if (url.startsWith('http') && !url.includes('exitapi.js') && !url.includes('fonts.googleapis.com')) {
+                            tag.remove();
+                        }
+                    });
+                    htmlText = '<!DOCTYPE html>\n' + doc.documentElement.outerHTML;
+
+                    log("Injected Google Ads ExitApi and SystemJS bootloader.");
                 }
 
                 // Add index.html to final ZIP

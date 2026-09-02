@@ -1,592 +1,858 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ultimate Playable Ad Converter</title>
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- JSZip for handling zip packages -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-</head>
-<body class="bg-slate-50 min-h-screen py-10 px-4">
-    <div class="max-w-3xl mx-auto bg-white rounded-2xl shadow-xl overflow-hidden p-8">
-        <header class="text-center mb-8">
-            <h1 class="text-3xl font-bold text-slate-800">Playable Ad to Google Ads Converter</h1>
-            <p class="text-slate-500 mt-2">1:1 Port of Python Backend. Strict UTF-8 & Corrupt Image Filtering.</p>
-        </header>
-
-        <!-- Main Upload Box -->
-        <div class="mb-4">
-            <label class="block text-sm font-medium text-slate-700 mb-2">Upload Ad File (.html or .zip) <span class="text-red-500">*</span></label>
-            <div class="border-2 border-dashed border-slate-300 rounded-xl p-6 text-center hover:border-indigo-500 transition cursor-pointer bg-slate-50" id="drop-zone-html">
-                <input type="file" id="file-html" accept=".html,.zip,.txt" class="hidden">
-                <div id="label-html">
-                    <p class="text-slate-600 font-medium">Drag & drop your .html or .zip file here, or <span class="text-indigo-600 underline">browse</span></p>
-                </div>
-                <div id="info-html" class="hidden text-indigo-600 font-semibold"></div>
-            </div>
-        </div>
-
-        <!-- Optional JS Upload Box -->
-        <div class="mb-6">
-            <label class="block text-sm font-medium text-slate-700 mb-2">Upload Companion JS Loader File <span class="text-slate-400 font-normal">(Optional)</span></label>
-            <div class="border-2 border-dashed border-slate-300 rounded-xl p-6 text-center hover:border-indigo-500 transition cursor-pointer bg-slate-50" id="drop-zone-js">
-                <input type="file" id="file-js" accept=".js,.txt" class="hidden">
-                <div id="label-js">
-                    <p class="text-slate-600 font-medium">Drag & drop optional JS loader here, or <span class="text-indigo-600 underline">browse</span></p>
-                </div>
-                <div id="info-js" class="hidden text-indigo-600 font-semibold"></div>
-            </div>
-        </div>
-
-        <!-- Convert Button -->
-        <button id="convert-btn" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 px-6 rounded-xl shadow-lg transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
-            Convert & Package for Google Ads
-        </button>
-
-        <!-- Live Debug Log Box -->
-        <div id="log-box" class="mt-6 p-4 bg-slate-900 text-emerald-400 font-mono text-xs rounded-xl h-44 overflow-y-auto hidden">
-            <div class="font-bold text-slate-400 mb-1">--- Live Processing Logs ---</div>
-        </div>
-
-        <!-- Results Section -->
-        <div id="results-section" class="hidden mt-8 border-t border-slate-200 pt-6">
-            <div class="p-4 rounded-xl mb-6 bg-emerald-50 text-emerald-700 font-medium text-center">
-                Conversion Completed Successfully!
-            </div>
-
-            <div class="grid grid-cols-3 gap-4 text-center mb-6">
-                <div class="bg-slate-50 p-4 rounded-xl border border-slate-100">
-                    <span class="block text-xs text-slate-400 uppercase">Status</span>
-                    <span class="text-lg font-bold text-emerald-600">PASS</span>
-                </div>
-                <div class="bg-slate-50 p-4 rounded-xl border border-slate-100">
-                    <span class="block text-xs text-slate-400 uppercase">ClickTag</span>
-                    <span class="text-lg font-bold text-slate-700">True</span>
-                </div>
-                <div class="bg-slate-50 p-4 rounded-xl border border-slate-100">
-                    <span class="block text-xs text-slate-400 uppercase">ExitAd</span>
-                    <span class="text-lg font-bold text-slate-700">True</span>
-                </div>
-            </div>
-
-            <div class="text-sm text-slate-500 text-center mb-6">
-                Final Package Size: <span id="package-size" class="font-semibold text-slate-700">0 KB</span>
-            </div>
-
-            <a id="download-btn" class="block text-center w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-3 px-6 rounded-xl shadow-lg transition duration-200 cursor-pointer">
-                Download Google_Ads_Ready.zip
-            </a>
-        </div>
-    </div>
-
-    <script>
-        let uploadedFile = null;
-        let jsFile = null;
-
-        function log(message) {
-            const box = document.getElementById('log-box');
-            box.classList.remove('hidden');
-            box.innerHTML += `<div>[${new Date().toLocaleTimeString()}] ${message}</div>`;
-            box.scrollTop = box.scrollHeight;
-            console.log(message);
-        }
-
-        const dropZone = document.getElementById('drop-zone-html');
-        const fileInput = document.getElementById('file-html');
-        const infoDiv = document.getElementById('info-html');
-        const labelDiv = document.getElementById('label-html');
-
-        dropZone.addEventListener('click', () => fileInput.click());
-        fileInput.addEventListener('change', (e) => {
-            uploadedFile = e.target.files[0];
-            labelDiv.classList.add('hidden');
-            infoDiv.classList.remove('hidden');
-            infoDiv.textContent = `Main File: ${uploadedFile.name} (${(uploadedFile.size / (1024*1024)).toFixed(2)} MB)`;
-            document.getElementById('convert-btn').disabled = false;
-            log(`Main file selected: ${uploadedFile.name}`);
-        });
-
-        const dropZoneJs = document.getElementById('drop-zone-js');
-        const fileInputJs = document.getElementById('file-js');
-        const infoDivJs = document.getElementById('info-js');
-        const labelDivJs = document.getElementById('label-js');
-
-        dropZoneJs.addEventListener('click', () => fileInputJs.click());
-        fileInputJs.addEventListener('change', (e) => {
-            jsFile = e.target.files[0];
-            labelDivJs.classList.add('hidden');
-            infoDivJs.classList.remove('hidden');
-            infoDivJs.textContent = `JS File: ${jsFile.name}`;
-            log(`Optional JS file selected: ${jsFile.name}`);
-        });
-
-        const sEnd = "</" + "script>";
-
-        function isValidImage(buffer, filename) {
-            const name = filename.toLowerCase();
-            if (buffer.length < 8) return false;
-
-            if (name.endsWith('.png')) {
-                return buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4E && buffer[3] === 0x47;
-            }
-            if (name.endsWith('.jpg') || name.endsWith('.jpeg')) {
-                return buffer[0] === 0xFF && buffer[1] === 0xD8 && buffer[2] === 0xFF;
-            }
-            return true;
-        }
-
-        function getMimeType(filename) {
-            const ext = filename.split('.').pop().toLowerCase();
-            switch (ext) {
-                case 'png': return 'image/png';
-                case 'jpg': case 'jpeg': return 'image/jpeg';
-                case 'gif': return 'image/gif';
-                case 'mp3': return 'audio/mpeg';
-                case 'wav': return 'audio/wav';
-                case 'mp4': return 'video/mp4';
-                case 'json': return 'application/json';
-                case 'js': return 'application/javascript';
-                case 'css': return 'text/css';
-                case 'html': return 'text/html';
-                case 'svg': return 'image/svg+xml';
-                default: return 'application/octet-stream';
-            }
-        }
-
-        function extractAppLovinPayload(jsContent) {
-            let start = jsContent.indexOf('al_renderHtml({"html":"');
-            if (start === -1) return null;
-            start += 'al_renderHtml({"html":"'.length;
-            let end = jsContent.indexOf('"})', start);
-            if (end === -1) return null;
-            let payload = jsContent.substring(start, end);
-            payload = payload.replace(/\\"/g, '"').replace(/\\n/g, '\n').replace(/\\r/g, '\r').replace(/\\t/g, '\t').replace(/\\\//g, '/');
-            return payload;
-        }
-
-        function convertApplovinExit(html) {
-            html = html.replace(/mraid\.open\(/g, "exitAd(");
-            html = html.replace(/super_open\(/g, "exitAd(");
-
-            const exitScript = `
-<!-- Google Ads Official Exit API Script -->
-<script type="text/javascript" src="https://tpc.googlesyndication.com/pagead/gadgets/html5/api/exitapi.js">${sEnd}
-<script>
-var clickTag = "https://www.google.com";
-
-function exitAd(url){
-    var target = url || clickTag;
-    if (typeof ExitApi !== 'undefined' && ExitApi.exit) {
-        ExitApi.exit();
-    } else if(target) {
-        window.open(target, "_blank");
-    }
-}
-
-// FIXED: FULL MRAID MOCK API
-// Without this, ads that check mraid.getState() (like Easybrain) will crash and show a blank screen.
-window.mraid = window.mraid || {
-    addEventListener: function () {},
-    removeEventListener: function () {},
-    isViewable: function () { return true; },
-    getState: function () { return "default"; },
-    open: function (url) { exitAd(url); },
-    close: function () {}
-};
-window.mraid.open = function(url) { exitAd(url); }; // Safety override
-
-var originalWindowOpen = window.open;
-window.open = function(url, target, features) { exitAd(url); };
-
-document.addEventListener('click', function(e) {
-    var target = e.target.closest('a, button, .cta, .button, [id*="cta"], [class*="cta"], [id*="play"], [class*="play"]');
-    if (target || (e.clientX > window.innerWidth - 150 && e.clientY > window.innerHeight - 80)) {
-        exitAd();
-    }
-}, { capture: true, passive: true });
-${sEnd}
-`;
-            if (html.includes("</head>")) {
-                html = html.replace("</head>", exitScript + "</head>");
-            } else {
-                html = exitScript + html;
-            }
-            return html;
-        }
-
-        function convertCocosLoader(html) {
-            html = html.replace(/\.\/\.\.\/cocos-js\/cc\.js/g, "./cocos-js/cc.js");
-            html = html.replace(/<script>\s*\(function\(global\)[\s\S]*?<\/script>/g, "");
-
-            const placeholders = [
-                "/* COCOS_SYSTEM_JS_PLACEHOLDER */",
-                "/* COCOS_INDEX_JS_PLACEHOLDER */",
-                "<!-- COCOS_RUNTIME_PLACEHOLDER -->",
-                "<!-- COCOS_BOOT_PLACEHOLDER -->"
-            ];
-            for (let ph of placeholders) {
-                html = html.split(ph).join("");
-            }
-
-            html = html.replace(/<script[^>]*src=["'](?:\.\/)?index\.js["'][^>]*><\/script>/gi, "");
-
-            const runtime_placeholder = "\n<!-- COCOS_RUNTIME_PLACEHOLDER -->\n";
-            const boot_placeholder = `\n<script>\n(function () {\n    function bootCocos() {\n        if (!window.System || !System.import) {\n            console.error("COCOS BOOT FAILED", "SystemJS is not available");\n            return;\n        }\n        System.import("./index.js").then(function () {\n            console.log("COCOS BOOT OK");\n        }).catch(function (error) {\n            console.error("COCOS BOOT FAILED", error);\n        });\n    }\n    bootCocos();\n})();\n${sEnd}\n`;
-
-            if (html.includes("systemjs-importmap")) {
-                html = html.replace('<script type="systemjs-importmap">', runtime_placeholder + '\n<script type="systemjs-importmap">');
-            } else {
-                const fallback_import_map = `\n<script type="systemjs-importmap">\n{\n    "imports": {\n        "cc": "./cocos-js/cc.js"\n    }\n}\n${sEnd}\n`;
-                if (html.includes("</head>")) {
-                    html = html.replace("</head>", runtime_placeholder + fallback_import_map + "\n</head>");
-                } else {
-                    html = runtime_placeholder + fallback_import_map + html;
-                }
-            }
-
-            if (html.includes("</body>")) {
-                html = html.replace("</body>", boot_placeholder + "\n</body>");
-            } else {
-                html += "\n" + boot_placeholder;
-            }
-            return html;
-        }
-
-        const buildCleanCocosHtml = (resContent) => {
-            return `<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8">
-    <meta name="ad.size" content="width=320,height=480">
-    <title>Playable Ad</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <style>
-        html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #000000; }
-        #GameDiv { position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: hidden; }
-        #GameCanvas { width: 100%; height: 100%; display: block; outline: none; touch-action: none; }
-    </style>
-
-    <!-- Google Ads Official Exit API Script -->
-    <script type="text/javascript" src="https://tpc.googlesyndication.com/pagead/gadgets/html5/api/exitapi.js">${sEnd}
-
-<script type="text/javascript">
-    window.clickTag = "https://www.google.com";
-
-    var originalWindowOpen = window.open;
-    window.open = function(url, target, features) {
-        if (typeof ExitApi !== "undefined") {
-            ExitApi.exit();
-        } else {
-            originalWindowOpen(window.clickTag, "_blank");
-        }
-    };
-
-    window.exitAd = function () {
-        window.open(window.clickTag, "_blank"); 
-    };
-
-    window.mraid = window.mraid || {
-        addEventListener: function () {},
-        removeEventListener: function () {},
-        isViewable: function () { return true; },
-        getState: function () { return "default"; },
-        open: function (url) { window.exitAd(); },
-        close: function () {}
-    };
-
-    window.super_html = window.super_html || {};
-    window.super_html.download = window.exitAd;
-
-    function _createLocalJSElement(url) {
-        var script = document.createElement("script");
-        script.src = url;
-        script.async = true;
-        return script;
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Playable Ad to Google Ads Converter</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #07111f;
+      --panel: rgba(15, 31, 52, .86);
+      --panel-2: #10243c;
+      --text: #edf6ff;
+      --muted: #9bb0c7;
+      --blue: #38bdf8;
+      --green: #4ade80;
+      --red: #fb7185;
+      --yellow: #facc15;
+      --border: rgba(148, 163, 184, .22);
     }
 
-    window._createLocalJSElement = _createLocalJSElement;
+    * { box-sizing: border-box; }
 
-    function super_log(message) {
-        console.log("[super-html] " + message);
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font: 15px/1.55 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 15% 5%, rgba(14, 165, 233, .22), transparent 34rem),
+        radial-gradient(circle at 85% 100%, rgba(34, 197, 94, .16), transparent 32rem),
+        var(--bg);
     }
 
-    window.super_log = window.super_log || super_log;
+    main { width: min(920px, calc(100% - 32px)); margin: 0 auto; padding: 58px 0; }
+    header { text-align: center; margin-bottom: 28px; }
+    h1 { margin: 0 0 8px; font-size: clamp(28px, 5vw, 44px); letter-spacing: -.035em; }
+    header p { max-width: 690px; margin: auto; color: var(--muted); font-size: 16px; }
 
-    function super_eval(url) {
-        var resources = window.__res || {};
-        var key = url;
-        var code = resources[key];
-
-        if (!code) {
-            for (var candidate in resources) {
-                if (url.indexOf(candidate) !== -1 && url.indexOf(candidate) + candidate.length === url.length) {
-                    key = candidate;
-                    code = resources[candidate];
-                    break;
-                }
-            }
-        }
-
-        if (!code) {
-            console.error("super_eval missing resource", url);
-            return;
-        }
-
-        code = String(code);
-        code = code.replace(/window\\.location\\.href\\s*=\\s*[^;]+;/gi, "window.exitAd();");
-        code = code.replace(/location\\.href\\s*=\\s*[^;]+;/gi, "window.exitAd();");
-        code = code.replace(/super_html\\.download\\s*\\([^)]*\\)/gi, "window.exitAd()");
-        code = code.replace(/window\\.super_html\\.download\\s*\\([^)]*\\)/gi, "window.exitAd()");
-        code = code.replace(/mraid\\.open\\s*\\([^)]*\\)/gi, "window.exitAd()");
-
-        eval(code);
-        delete resources[key];
+    .card {
+      border: 1px solid var(--border);
+      border-radius: 22px;
+      background: var(--panel);
+      box-shadow: 0 26px 80px rgba(0, 0, 0, .34);
+      backdrop-filter: blur(18px);
+      overflow: hidden;
     }
-    window.super_eval = super_eval;
-    ${sEnd}
 
-    <script>
-        window.__res = ${resContent};
-    ${sEnd}
-
-    <script src="./@src/polyfills.bundle.js">${sEnd}
-    <script src="./@src/system.bundle.js">${sEnd}
-
-    <script type="systemjs-importmap">
-    {
-        "imports": {
-            "cc": "./cocos-js/cc.js"
-        }
+    .drop {
+      margin: 24px;
+      min-height: 220px;
+      padding: 32px;
+      display: grid;
+      place-items: center;
+      text-align: center;
+      border: 2px dashed rgba(56, 189, 248, .45);
+      border-radius: 18px;
+      background: rgba(56, 189, 248, .05);
+      cursor: pointer;
+      transition: .2s ease;
     }
-    ${sEnd}
 
-    <script src="./@src/cc.adapter.js">${sEnd}
+    .drop:hover, .drop.drag { transform: translateY(-2px); border-color: var(--blue); background: rgba(56, 189, 248, .1); }
+    .drop strong { display: block; margin-bottom: 7px; font-size: 20px; }
+    .drop span { color: var(--muted); }
+    .drop small { display: block; margin-top: 12px; color: #6f88a2; }
+    .icon { font-size: 46px; margin-bottom: 10px; }
+    .file-picker { padding: 0 24px 18px; }
+    input[type=file] {
+      position: static;
+      display: block;
+      width: 100%;
+      min-height: 54px;
+      padding: 8px;
+      border: 1px solid rgba(56, 189, 248, .5);
+      border-radius: 12px;
+      color: var(--muted);
+      background: #081728;
+      opacity: 1;
+      pointer-events: auto;
+      cursor: pointer;
+    }
+    input[type=file]::file-selector-button {
+      margin-right: 14px;
+      border: 0;
+      border-radius: 9px;
+      padding: 10px 18px;
+      color: #042034;
+      background: linear-gradient(135deg, #67e8f9, #38bdf8);
+      font: inherit;
+      font-weight: 750;
+      cursor: pointer;
+    }
+    .picker-help { display: block; margin-top: 7px; color: #7890a9; font-size: 12px; }
+
+    .controls { display: grid; grid-template-columns: 1fr auto; gap: 12px; padding: 0 24px 24px; }
+    input[type=url] {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 13px 15px;
+      color: var(--text);
+      background: #081728;
+      outline: none;
+    }
+    input[type=url]:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(56, 189, 248, .12); }
+
+    button {
+      border: 0;
+      border-radius: 12px;
+      padding: 13px 22px;
+      font: inherit;
+      font-weight: 750;
+      color: #042034;
+      background: linear-gradient(135deg, #67e8f9, #38bdf8);
+      cursor: pointer;
+      box-shadow: 0 10px 28px rgba(56, 189, 248, .22);
+    }
+    button:disabled { cursor: not-allowed; opacity: .45; box-shadow: none; }
+
+    .result { display: none; border-top: 1px solid var(--border); padding: 24px; background: rgba(4, 14, 26, .42); }
+    .result.show { display: block; }
+    .status-line { display: flex; align-items: flex-start; gap: 12px; }
+    .status-dot { flex: 0 0 auto; width: 12px; height: 12px; margin-top: 6px; border-radius: 50%; background: var(--yellow); box-shadow: 0 0 18px currentColor; }
+    .result.pass .status-dot { color: var(--green); background: var(--green); }
+    .result.fail .status-dot { color: var(--red); background: var(--red); }
+    .status-title { margin: 0; font-weight: 750; font-size: 18px; }
+    .status-message { margin: 3px 0 0; color: var(--muted); white-space: pre-wrap; }
+
+    .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 20px 0; }
+    .metric { padding: 13px; border: 1px solid var(--border); border-radius: 12px; background: var(--panel-2); }
+    .metric b { display: block; font-size: 16px; }
+    .metric span { color: var(--muted); font-size: 12px; }
+    .log { max-height: 210px; overflow: auto; margin: 0; padding: 14px 16px; border-radius: 12px; color: #bfd3e7; background: #06101c; font: 12px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: pre-wrap; }
+    .privacy { padding: 18px 24px; border-top: 1px solid var(--border); color: var(--muted); font-size: 13px; }
+
+    @media (max-width: 700px) {
+      main { padding: 28px 0; }
+      .controls { grid-template-columns: 1fr; }
+      .metrics { grid-template-columns: repeat(2, 1fr); }
+      .drop { margin: 16px; padding: 24px 16px; }
+    }
+  </style>
 </head>
 <body>
-    <div id="GameDiv" cc_exact_fit_screen="true">
-        <canvas id="GameCanvas" oncontextmenu="event.preventDefault()" tabindex="99"></canvas>
+<main>
+  <header>
+    <h1>Playable → Google Ads</h1>
+    <p>Upload the source HTML. The converter detects its loader JavaScript, captures the playable, extracts embedded assets, adds Google Ads exit handling, validates the result, and builds the ZIP.</p>
+  </header>
+
+  <section class="card">
+    <label class="drop" id="dropZone" for="sourceFiles">
+      <div>
+        <div class="icon">⚡</div>
+        <strong id="fileTitle">Choose or drop the playable HTML</strong>
+        <span id="fileSubtitle">The linked AppLovin JavaScript is detected automatically</span>
+        <small>You may select extra local .js/assets together when the HTML does not use an online loader.</small>
+      </div>
+    </label>
+
+    <div class="file-picker">
+      <input id="sourceFiles" type="file" accept=".html,.htm,.js,.txt,.json,.bin,.png,.jpg,.jpeg,.webp,.gif,.svg,.mp3,.ogg,.wav,.css" multiple>
+      <span class="picker-help">Select one HTML file. You can also select its local JS/assets in the same window when needed.</span>
     </div>
-    <script>
-        (function () {
-            function startPlayable() {
-                if (typeof window.super_boot_engine === "function") {
-                    window.super_boot_engine();
-                    console.log("COCOS BOOT OK (super_boot_engine)");
-                } else if (window.System && window.System.import) {
-                    window.System.import("./index.js").then(function () {
-                        console.log("COCOS BOOT OK (System.import)");
-                    }).catch(function (error) {
-                        console.error("COCOS BOOT FAILED (System.import)", error);
-                    });
-                } else {
-                    console.error("COCOS BOOT FAILED", "No valid bootloader is available.");
-                }
-            }
-            if (document.readyState === "loading") {
-                document.addEventListener("DOMContentLoaded", startPlayable);
-            } else {
-                startPlayable();
-            }
-        })();
-    ${sEnd}
+
+    <div class="controls">
+      <input id="clickUrl" type="url" value="https://www.google.com" aria-label="Default click URL" placeholder="Default click URL">
+      <button id="convertButton" disabled>Convert &amp; Download ZIP</button>
+    </div>
+
+    <section class="result" id="result" aria-live="polite">
+      <div class="status-line">
+        <span class="status-dot"></span>
+        <div>
+          <p class="status-title" id="statusTitle">Ready</p>
+          <p class="status-message" id="statusMessage"></p>
+        </div>
+      </div>
+      <div class="metrics">
+        <div class="metric"><b id="metricMode">—</b><span>Detected mode</span></div>
+        <div class="metric"><b id="metricFiles">—</b><span>Files in ZIP</span></div>
+        <div class="metric"><b id="metricSize">—</b><span>ZIP size</span></div>
+        <div class="metric"><b id="metricValidation">—</b><span>Local validation</span></div>
+      </div>
+      <pre class="log" id="log"></pre>
+    </section>
+
+    <div class="privacy">Processing happens in this browser. Uploaded files are not sent to a server.</div>
+  </section>
+</main>
+
+<script>
+(() => {
+  "use strict";
+
+  const MAX_INPUT_BYTES = 120 * 1024 * 1024;
+  const MAX_EXTRACTED_BYTES = 180 * 1024 * 1024;
+  const MAX_ZIP_FILES = 20000;
+  const ALLOWED_REMOTE_PROTOCOLS = new Set(["https:", "http:"]);
+  const textEncoder = new TextEncoder();
+  const utf8 = new TextDecoder("utf-8");
+  const utf8Fatal = new TextDecoder("utf-8", { fatal: true });
+
+  const fileInput = document.querySelector("#sourceFiles");
+  const dropZone = document.querySelector("#dropZone");
+  const convertButton = document.querySelector("#convertButton");
+  const clickUrlInput = document.querySelector("#clickUrl");
+  const result = document.querySelector("#result");
+  const logBox = document.querySelector("#log");
+  let selectedFiles = [];
+  let logs = [];
+
+  const $ = id => document.getElementById(id);
+  const log = message => {
+    logs.push(String(message));
+    logBox.textContent = logs.join("\n");
+    logBox.scrollTop = logBox.scrollHeight;
+  };
+
+  function setStatus(kind, title, message = "") {
+    result.className = `result show ${kind}`;
+    $("statusTitle").textContent = title;
+    $("statusMessage").textContent = message;
+  }
+
+  function formatBytes(bytes) {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 ** 2) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / 1024 ** 2).toFixed(2)} MB`;
+  }
+
+  function normalizePath(raw) {
+    const clean = String(raw || "").replace(/\\/g, "/").replace(/^\/+/, "");
+    const parts = clean.split("/").filter(Boolean);
+    if (!parts.length || parts.some(part => part === ".." || part.includes("\0"))) return null;
+    return parts.filter(part => part !== ".").join("/");
+  }
+
+  function basename(path) {
+    return String(path).replace(/\\/g, "/").split("/").pop();
+  }
+
+  function escapeHtmlAttribute(value) {
+    return String(value).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+
+  function safeInlineScript(text) {
+    return String(text)
+      .replace(/<\/script/gi, "<\\/script")
+      .replace(/<!--/g, "<\\!--")
+      .replace(/\u2028/g, "\\u2028")
+      .replace(/\u2029/g, "\\u2029");
+  }
+
+  function validClickUrl(value) {
+    const url = new URL(value);
+    if (!ALLOWED_REMOTE_PROTOCOLS.has(url.protocol)) throw new Error("Click URL must start with https:// or http://");
+    return url.href;
+  }
+
+  function chooseFiles(files) {
+    selectedFiles = Array.from(files || []);
+    const htmlFiles = selectedFiles.filter(file => /\.html?$/i.test(file.name));
+    const total = selectedFiles.reduce((sum, file) => sum + file.size, 0);
+
+    if (!selectedFiles.length) {
+      $("fileTitle").textContent = "Choose or drop the playable HTML";
+      $("fileSubtitle").textContent = "The linked AppLovin JavaScript is detected automatically";
+      convertButton.disabled = true;
+      return;
+    }
+
+    $("fileTitle").textContent = htmlFiles.length === 1 ? htmlFiles[0].name : `${selectedFiles.length} files selected`;
+    $("fileSubtitle").textContent = `${formatBytes(total)} • ${htmlFiles.length} HTML file${htmlFiles.length === 1 ? "" : "s"}`;
+    convertButton.disabled = htmlFiles.length !== 1 || total > MAX_INPUT_BYTES;
+
+    if (htmlFiles.length !== 1) setStatus("fail", "Select exactly one HTML file", "Extra JavaScript and asset files are allowed, but there must be exactly one .html or .htm file.");
+    else if (total > MAX_INPUT_BYTES) setStatus("fail", "Input is too large", `The selected files exceed the ${formatBytes(MAX_INPUT_BYTES)} safety limit.`);
+    else result.className = "result";
+  }
+
+  fileInput.addEventListener("change", event => chooseFiles(event.target.files));
+  ["dragenter", "dragover"].forEach(type => dropZone.addEventListener(type, event => {
+    event.preventDefault();
+    dropZone.classList.add("drag");
+  }));
+  ["dragleave", "drop"].forEach(type => dropZone.addEventListener(type, event => {
+    event.preventDefault();
+    dropZone.classList.remove("drag");
+  }));
+  dropZone.addEventListener("drop", event => chooseFiles(event.dataTransfer.files));
+
+  async function readText(file) {
+    return utf8.decode(await file.arrayBuffer());
+  }
+
+  function extractScriptTags(html) {
+    const doc = new DOMParser().parseFromString(html, "text/html");
+    return Array.from(doc.querySelectorAll("script")).map(script => ({
+      src: script.getAttribute("src") || "",
+      text: script.textContent || ""
+    }));
+  }
+
+  function isPlayableHtml(html) {
+    return /window\s*\.\s*__zip\s*=|\b__zip\s*[:=]|id\s*=\s*["']GameCanvas|cc_exact_fit_screen/i.test(html);
+  }
+
+  async function captureLoaderPayload({ code = null, src = null, timeoutMs = 20000 }) {
+    return new Promise((resolve, reject) => {
+      const token = crypto.getRandomValues(new Uint32Array(4)).join("-");
+      const iframe = document.createElement("iframe");
+      iframe.setAttribute("sandbox", "allow-scripts");
+      iframe.hidden = true;
+      document.body.appendChild(iframe);
+      let settled = false;
+
+      const cleanup = () => {
+        window.removeEventListener("message", onMessage);
+        iframe.remove();
+      };
+      const finish = (fn, value) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        cleanup();
+        fn(value);
+      };
+      const onMessage = event => {
+        if (event.source !== iframe.contentWindow || !event.data || event.data.token !== token) return;
+        if (event.data.type === "payload" && typeof event.data.html === "string") finish(resolve, event.data.html);
+        if (event.data.type === "error") finish(reject, new Error(event.data.message || "Loader execution failed"));
+      };
+      window.addEventListener("message", onMessage);
+
+      const bridge = `
+        <script>
+          (function () {
+            var token = ${JSON.stringify(token)};
+            window.al_renderHtml = function (obj) {
+              var html = obj && typeof obj.html === "string" ? obj.html : "";
+              parent.postMessage({type:"payload", token:token, html:html}, "*");
+            };
+            window.addEventListener("error", function (event) {
+              parent.postMessage({type:"error", token:token, message:event.message || "Loader error"}, "*");
+            });
+          })();
+        <\/script>`;
+
+      if (src) {
+        iframe.srcdoc = `<!doctype html><meta charset="utf-8">${bridge}<script src="${escapeHtmlAttribute(src)}"><\/script>`;
+      } else {
+        iframe.srcdoc = `<!doctype html><meta charset="utf-8">${bridge}<script>${safeInlineScript(code || "")}<\/script>`;
+      }
+
+      const timer = setTimeout(() => finish(reject, new Error("The JavaScript loader did not return a playable payload before timeout.")), timeoutMs);
+    });
+  }
+
+  async function resolvePlayableHtml(sourceHtml, allFiles) {
+    if (isPlayableHtml(sourceHtml)) {
+      log("Playable content is already embedded in the HTML.");
+      return { html: sourceHtml, mode: "Embedded HTML", consumedFiles: new Set() };
+    }
+
+    const scripts = extractScriptTags(sourceHtml);
+    const extraScripts = allFiles.filter(file => /\.(js|txt)$/i.test(file.name));
+    const byName = new Map(extraScripts.map(file => [file.name.toLowerCase(), file]));
+    const errors = [];
+
+    for (const script of scripts) {
+      if (!script.src) continue;
+      const linkedName = basename(script.src.split(/[?#]/)[0]).toLowerCase();
+      const localFile = byName.get(linkedName);
+
+      if (localFile) {
+        log(`Using selected local loader: ${localFile.name}`);
+        try {
+          return { html: await captureLoaderPayload({ code: await readText(localFile) }), mode: "Local JS loader", consumedFiles: new Set([localFile]) };
+        } catch (error) { errors.push(error.message); }
+      }
+
+      try {
+        const resolved = new URL(script.src, "https://local.invalid/");
+        if (!ALLOWED_REMOTE_PROTOCOLS.has(resolved.protocol) || resolved.hostname === "local.invalid") continue;
+        log(`Detected online loader: ${resolved.href}`);
+
+        try {
+          const response = await fetch(resolved.href, { credentials: "omit", referrerPolicy: "no-referrer" });
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          const code = await response.text();
+          log("Loader downloaded directly.");
+          return { html: await captureLoaderPayload({ code }), mode: "Online JS loader", consumedFiles: new Set() };
+        } catch (fetchError) {
+          log(`Direct read unavailable (${fetchError.message}); capturing the loader in an isolated frame.`);
+          return { html: await captureLoaderPayload({ src: resolved.href }), mode: "Online JS loader", consumedFiles: new Set() };
+        }
+      } catch (error) { errors.push(error.message); }
+    }
+
+    for (const script of scripts) {
+      if (!script.src && /\bal_renderHtml\s*\(/.test(script.text)) {
+        try {
+          log("Detected an inline AppLovin payload.");
+          return { html: await captureLoaderPayload({ code: script.text }), mode: "Inline loader", consumedFiles: new Set() };
+        } catch (error) { errors.push(error.message); }
+      }
+    }
+
+    for (const file of extraScripts) {
+      try {
+        log(`Trying selected JavaScript: ${file.name}`);
+        return { html: await captureLoaderPayload({ code: await readText(file) }), mode: "Selected JS loader", consumedFiles: new Set([file]) };
+      } catch (error) { errors.push(error.message); }
+    }
+
+    if (/<!doctype html|<html[\s>]/i.test(sourceHtml)) {
+      log("No AppLovin payload was found; using generic HTML conversion mode.");
+      return { html: sourceHtml, mode: "Generic HTML", consumedFiles: new Set() };
+    }
+
+    throw new Error(`No playable HTML or supported JavaScript loader was detected.${errors.length ? `\n${errors.join("\n")}` : ""}`);
+  }
+
+  function findEmbeddedZipBase64(html) {
+    const patterns = [
+      /window\s*\.\s*__zip\s*=\s*"([A-Za-z0-9+/=\\n\\r\s]+)"/s,
+      /window\s*\.\s*__zip\s*=\s*'([A-Za-z0-9+/=\\n\\r\s]+)'/s,
+      /\b__zip\s*[:=]\s*"([A-Za-z0-9+/=\\n\\r\s]+)"/s
+    ];
+    for (const pattern of patterns) {
+      const match = html.match(pattern);
+      if (match) return match[1].replace(/\\[nr]/g, "").replace(/\s/g, "");
+    }
+    return null;
+  }
+
+  function base64Bytes(base64) {
+    let binary;
+    try { binary = atob(base64); }
+    catch { throw new Error("The embedded ZIP is not valid base64 data."); }
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return bytes;
+  }
+
+  function findEndOfCentralDirectory(bytes) {
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    const start = Math.max(0, bytes.length - 65557);
+    for (let i = bytes.length - 22; i >= start; i--) {
+      if (view.getUint32(i, true) === 0x06054b50) return i;
+    }
+    throw new Error("Embedded ZIP central directory was not found.");
+  }
+
+  async function inflateRaw(bytes) {
+    if (typeof DecompressionStream === "undefined") throw new Error("This browser cannot unpack compressed ZIP files. Use a current Chrome or Edge browser.");
+    const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
+    return new Uint8Array(await new Response(stream).arrayBuffer());
+  }
+
+  async function readZip(bytes) {
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    const eocd = findEndOfCentralDirectory(bytes);
+    const count = view.getUint16(eocd + 10, true);
+    const centralSize = view.getUint32(eocd + 12, true);
+    const centralOffset = view.getUint32(eocd + 16, true);
+    if (count > MAX_ZIP_FILES) throw new Error(`Embedded ZIP contains too many files (${count}).`);
+    if (centralOffset + centralSize > bytes.length) throw new Error("Embedded ZIP central directory is damaged.");
+
+    let offset = centralOffset;
+    let total = 0;
+    const files = new Map();
+
+    for (let i = 0; i < count; i++) {
+      if (view.getUint32(offset, true) !== 0x02014b50) throw new Error("Embedded ZIP entry is damaged.");
+      const flags = view.getUint16(offset + 8, true);
+      const method = view.getUint16(offset + 10, true);
+      const compressedSize = view.getUint32(offset + 20, true);
+      const uncompressedSize = view.getUint32(offset + 24, true);
+      const nameLength = view.getUint16(offset + 28, true);
+      const extraLength = view.getUint16(offset + 30, true);
+      const commentLength = view.getUint16(offset + 32, true);
+      const localOffset = view.getUint32(offset + 42, true);
+      const rawName = bytes.slice(offset + 46, offset + 46 + nameLength);
+      const decodedName = utf8.decode(rawName);
+      const isDirectory = decodedName.endsWith("/");
+      const name = normalizePath(decodedName);
+      offset += 46 + nameLength + extraLength + commentLength;
+
+      if (!name || isDirectory) continue;
+      if (flags & 1) throw new Error(`Encrypted ZIP entry is unsupported: ${name}`);
+      if (uncompressedSize === 0xffffffff || compressedSize === 0xffffffff) throw new Error("ZIP64 embedded archives are not supported.");
+      total += uncompressedSize;
+      if (total > MAX_EXTRACTED_BYTES) throw new Error(`Embedded ZIP expands beyond the ${formatBytes(MAX_EXTRACTED_BYTES)} safety limit.`);
+      if (view.getUint32(localOffset, true) !== 0x04034b50) throw new Error(`Local ZIP header is damaged: ${name}`);
+
+      const localNameLength = view.getUint16(localOffset + 26, true);
+      const localExtraLength = view.getUint16(localOffset + 28, true);
+      const dataOffset = localOffset + 30 + localNameLength + localExtraLength;
+      const compressed = bytes.slice(dataOffset, dataOffset + compressedSize);
+      let data;
+      if (method === 0) data = compressed;
+      else if (method === 8) data = await inflateRaw(compressed);
+      else throw new Error(`Unsupported ZIP compression method ${method}: ${name}`);
+      if (data.length !== uncompressedSize) throw new Error(`Unpacked size mismatch: ${name}`);
+      files.set(name, data);
+    }
+    return files;
+  }
+
+  function mimeFor(path) {
+    const ext = (path.match(/\.([a-z0-9]+)$/i) || [])[1]?.toLowerCase();
+    return ({
+      png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", webp: "image/webp", gif: "image/gif", svg: "image/svg+xml",
+      json: "application/json", js: "text/javascript", css: "text/css", html: "text/html", txt: "text/plain",
+      mp3: "audio/mpeg", ogg: "audio/ogg", wav: "audio/wav", bin: "application/octet-stream", mem: "application/octet-stream"
+    })[ext] || "application/octet-stream";
+  }
+
+  function bytesToBase64(bytes) {
+    let result = "";
+    const chunk = 0x8000;
+    for (let i = 0; i < bytes.length; i += chunk) result += String.fromCharCode(...bytes.subarray(i, i + chunk));
+    return btoa(result);
+  }
+
+  function wrapAdapter(files) {
+    const key = Array.from(files.keys()).find(name => /(^|\/)@src\/cc\.adapter\.js$/i.test(name));
+    if (!key) return;
+    try {
+      const code = utf8Fatal.decode(files.get(key));
+      if (!code.trimStart().startsWith("(function")) files.set(key, textEncoder.encode(`(function () {\n${code}\n})();\n`));
+    } catch { log("Warning: cc.adapter.js could not be read as UTF-8."); }
+  }
+
+  function buildResourceMap(files) {
+    const resources = {};
+    for (const [name, data] of files) {
+      if (basename(name) === "__res") continue;
+      try { resources[name] = utf8Fatal.decode(data); }
+      catch { resources[name] = `data:${mimeFor(name)};base64,${bytesToBase64(data)}`; }
+    }
+
+    const resEntry = Array.from(files.entries()).find(([name]) => basename(name) === "__res");
+    if (resEntry) {
+      try { Object.assign(resources, JSON.parse(utf8.decode(resEntry[1]))); }
+      catch { log("Warning: original __res could not be parsed; extracted files will be used instead."); }
+    }
+    return resources;
+  }
+
+  function exitBridge(clickUrl) {
+    return `
+<script type="text/javascript" src="https://tpc.googlesyndication.com/pagead/gadgets/html5/api/exitapi.js"><\/script>
+<script type="text/javascript">
+  var clickTag = ${JSON.stringify(clickUrl)};
+  window.clickTag = clickTag;
+  (function () {
+    var nativeOpen = window.open.bind(window);
+    window.exitAd = function () {
+      if (typeof window.ExitApi !== "undefined" && typeof window.ExitApi.exit === "function") window.ExitApi.exit();
+      else nativeOpen(window.clickTag, "_blank");
+    };
+    window.open = function () { window.exitAd(); };
+    window.mraid = window.mraid || {};
+    window.mraid.addEventListener = window.mraid.addEventListener || function () {};
+    window.mraid.removeEventListener = window.mraid.removeEventListener || function () {};
+    window.mraid.isViewable = window.mraid.isViewable || function () { return true; };
+    window.mraid.getState = window.mraid.getState || function () { return "default"; };
+    window.mraid.open = function () { window.exitAd(); };
+    window.mraid.close = window.mraid.close || function () {};
+    window.super_html = window.super_html || {};
+    window.super_html.download = window.exitAd;
+    window.super_open = window.exitAd;
+  })();
+<\/script>`;
+  }
+
+  function buildCocosHtml(resources, clickUrl) {
+    const resourceJson = safeInlineScript(JSON.stringify(resources));
+    return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="ad.size" content="width=320,height=480">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+  <title>Playable Ad</title>
+  <style>
+    html,body,#GameDiv { position:absolute; inset:0; width:100%; height:100%; margin:0; overflow:hidden; background:#000; }
+    #GameCanvas { width:100%; height:100%; display:block; outline:0; touch-action:none; }
+  </style>
+  ${exitBridge(clickUrl)}
+  <script>
+    window.__res = ${resourceJson};
+    window._createLocalJSElement = function (url) { var s=document.createElement("script"); s.src=url; s.async=true; return s; };
+    window.super_log = window.super_log || function (message) { console.log("[super-html] " + message); };
+    window.super_eval = function (url) {
+      var resources=window.__res || {}, key=url, code=resources[key];
+      if (!code) for (var candidate in resources) {
+        if (url.indexOf(candidate) !== -1 && url.indexOf(candidate) + candidate.length === url.length) { key=candidate; code=resources[candidate]; break; }
+      }
+      if (!code) { console.error("super_eval missing resource", url); return; }
+      code=String(code)
+        .replace(/window\\.location\\.href\\s*=\\s*[^;]+;/gi, "window.exitAd();")
+        .replace(/location\\.href\\s*=\\s*[^;]+;/gi, "window.exitAd();")
+        .replace(/(?:window\\.)?super_html\\.download\\s*\\([^)]*\\)/gi, "window.exitAd()")
+        .replace(/mraid\\.open\\s*\\([^)]*\\)/gi, "window.exitAd()");
+      (0,eval)(code); delete resources[key];
+    };
+  <\/script>
+  <script src="./@src/polyfills.bundle.js"><\/script>
+  <script src="./@src/system.bundle.js"><\/script>
+  <script type="systemjs-importmap">{"imports":{"cc":"./cocos-js/cc.js"}}<\/script>
+  <script src="./@src/cc.adapter.js"><\/script>
+</head>
+<body>
+  <div id="GameDiv" cc_exact_fit_screen="true"><canvas id="GameCanvas" oncontextmenu="event.preventDefault()" tabindex="99"></canvas></div>
+  <script>
+    (function () {
+      function start() {
+        if (typeof window.super_boot_engine === "function") window.super_boot_engine();
+        else console.error("COCOS BOOT FAILED: super_boot_engine is unavailable");
+      }
+      if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start); else start();
+    })();
+  <\/script>
 </body>
 </html>`;
-        };
+  }
 
-        function base64ToUint8Array(base64) {
-            base64 = base64.replace(/[^A-Za-z0-9+/=]/g, "");
-            while (base64.length % 4 !== 0) base64 += '=';
-            const binaryString = window.atob(base64);
-            const len = binaryString.length;
-            const bytes = new Uint8Array(len);
-            for (let i = 0; i < len; i++) {
-                bytes[i] = binaryString.charCodeAt(i);
-            }
-            return bytes;
+  function removeDisallowedRemoteScripts(html) {
+    return html.replace(/<script\b([^>]*?)\bsrc\s*=\s*(["'])(.*?)\2([^>]*)>\s*<\/script\s*>/gis, (tag, before, quote, src) => {
+      if (!/^(?:https?:)?\/\//i.test(src) || /tpc\.googlesyndication\.com\/.*exitapi\.js/i.test(src)) return tag;
+      log(`Removed remote script from generic package: ${src}`);
+      return "";
+    });
+  }
+
+  function injectIntoHead(html, content) {
+    if (/<head\b[^>]*>/i.test(html)) return html.replace(/<head\b[^>]*>/i, match => `${match}\n${content}`);
+    if (/<html\b[^>]*>/i.test(html)) return html.replace(/<html\b[^>]*>/i, match => `${match}\n<head>${content}</head>`);
+    return `<!doctype html><html><head>${content}</head><body>${html}</body></html>`;
+  }
+
+  function buildGenericHtml(playableHtml, clickUrl) {
+    let html = removeDisallowedRemoteScripts(playableHtml);
+    if (!/<meta\b[^>]*name\s*=\s*["']ad\.size["']/i.test(html)) {
+      html = injectIntoHead(html, `<meta name="ad.size" content="width=320,height=480">`);
+    }
+    html = injectIntoHead(html, exitBridge(clickUrl));
+    return html;
+  }
+
+  function localValidation(indexHtml, outputFiles) {
+    const scriptSources = Array.from(indexHtml.matchAll(/<script[^>]+src=["']([^"']+)["']/gi), match => match[1]);
+    const remote = scriptSources.filter(src => /^(?:https?:)?\/\//i.test(src) && !/exitapi\.js/i.test(src));
+    const missingLocal = scriptSources
+      .filter(src => !/^(?:https?:)?\/\//i.test(src))
+      .map(src => normalizePath(src.replace(/^\.\//, "").split(/[?#]/)[0]))
+      .filter(path => path && !outputFiles.has(path));
+    const checks = {
+      "root index.html": outputFiles.has("index.html"),
+      "ad.size meta": /name\s*=\s*["']ad\.size["']/i.test(indexHtml),
+      "clickTag": /\bclickTag\b/.test(indexHtml),
+      "exit handling": /ExitApi\.exit|\bexitAd\b/.test(indexHtml),
+      "no disallowed remote scripts": remote.length === 0,
+      "local script files present": missingLocal.length === 0
+    };
+    return { checks, remote, missingLocal, pass: Object.values(checks).every(Boolean) };
+  }
+
+  const crcTable = (() => {
+    const table = new Uint32Array(256);
+    for (let n = 0; n < 256; n++) {
+      let c = n;
+      for (let k = 0; k < 8; k++) c = (c & 1) ? (0xedb88320 ^ (c >>> 1)) : (c >>> 1);
+      table[n] = c >>> 0;
+    }
+    return table;
+  })();
+
+  function crc32(bytes) {
+    let crc = 0xffffffff;
+    for (const byte of bytes) crc = crcTable[(crc ^ byte) & 0xff] ^ (crc >>> 8);
+    return (crc ^ 0xffffffff) >>> 0;
+  }
+
+  function dosDateTime(date = new Date()) {
+    const year = Math.max(1980, date.getFullYear());
+    return {
+      time: (date.getHours() << 11) | (date.getMinutes() << 5) | (date.getSeconds() >> 1),
+      date: ((year - 1980) << 9) | ((date.getMonth() + 1) << 5) | date.getDate()
+    };
+  }
+
+  function concatBytes(chunks) {
+    const size = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+    const out = new Uint8Array(size);
+    let offset = 0;
+    for (const chunk of chunks) { out.set(chunk, offset); offset += chunk.length; }
+    return out;
+  }
+
+  async function deflateRaw(bytes) {
+    if (typeof CompressionStream === "undefined") return { method: 0, bytes };
+    try {
+      const stream = new Blob([bytes]).stream().pipeThrough(new CompressionStream("deflate-raw"));
+      const compressed = new Uint8Array(await new Response(stream).arrayBuffer());
+      return compressed.length < bytes.length ? { method: 8, bytes: compressed } : { method: 0, bytes };
+    } catch {
+      try {
+        const stream = new Blob([bytes]).stream().pipeThrough(new CompressionStream("deflate"));
+        const wrapped = new Uint8Array(await new Response(stream).arrayBuffer());
+        const compressed = wrapped.slice(2, -4);
+        return compressed.length < bytes.length ? { method: 8, bytes: compressed } : { method: 0, bytes };
+      } catch { return { method: 0, bytes }; }
+    }
+  }
+
+  async function writeZip(files) {
+    const localChunks = [];
+    const centralChunks = [];
+    let localOffset = 0;
+    const stamp = dosDateTime();
+
+    for (const [name, raw] of files) {
+      const path = normalizePath(name);
+      if (!path) throw new Error(`Unsafe output path: ${name}`);
+      const nameBytes = textEncoder.encode(path);
+      const data = raw instanceof Uint8Array ? raw : textEncoder.encode(String(raw));
+      const packed = await deflateRaw(data);
+      const checksum = crc32(data);
+      const local = new Uint8Array(30 + nameBytes.length + packed.bytes.length);
+      const lv = new DataView(local.buffer);
+      lv.setUint32(0, 0x04034b50, true); lv.setUint16(4, 20, true); lv.setUint16(6, 0x0800, true);
+      lv.setUint16(8, packed.method, true); lv.setUint16(10, stamp.time, true); lv.setUint16(12, stamp.date, true);
+      lv.setUint32(14, checksum, true); lv.setUint32(18, packed.bytes.length, true); lv.setUint32(22, data.length, true);
+      lv.setUint16(26, nameBytes.length, true); lv.setUint16(28, 0, true);
+      local.set(nameBytes, 30); local.set(packed.bytes, 30 + nameBytes.length);
+      localChunks.push(local);
+
+      const central = new Uint8Array(46 + nameBytes.length);
+      const cv = new DataView(central.buffer);
+      cv.setUint32(0, 0x02014b50, true); cv.setUint16(4, 20, true); cv.setUint16(6, 20, true); cv.setUint16(8, 0x0800, true);
+      cv.setUint16(10, packed.method, true); cv.setUint16(12, stamp.time, true); cv.setUint16(14, stamp.date, true);
+      cv.setUint32(16, checksum, true); cv.setUint32(20, packed.bytes.length, true); cv.setUint32(24, data.length, true);
+      cv.setUint16(28, nameBytes.length, true); cv.setUint32(38, 0, true); cv.setUint32(42, localOffset, true);
+      central.set(nameBytes, 46); centralChunks.push(central);
+      localOffset += local.length;
+    }
+
+    const centralSize = centralChunks.reduce((sum, part) => sum + part.length, 0);
+    const eocd = new Uint8Array(22);
+    const ev = new DataView(eocd.buffer);
+    ev.setUint32(0, 0x06054b50, true); ev.setUint16(8, files.size, true); ev.setUint16(10, files.size, true);
+    ev.setUint32(12, centralSize, true); ev.setUint32(16, localOffset, true);
+    return concatBytes([...localChunks, ...centralChunks, eocd]);
+  }
+
+  function downloadBlob(bytes, name) {
+    const url = URL.createObjectURL(new Blob([bytes], { type: "application/zip" }));
+    const a = document.createElement("a");
+    a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
+  }
+
+  function selectedExtraFiles(htmlFile, consumedFiles) {
+    const extras = new Map();
+    for (const file of selectedFiles) {
+      if (file === htmlFile || consumedFiles.has(file) || /\.html?$/i.test(file.name)) continue;
+      const path = normalizePath(file.webkitRelativePath || file.name);
+      if (path) extras.set(path, file);
+    }
+    return extras;
+  }
+
+  convertButton.addEventListener("click", async () => {
+    convertButton.disabled = true;
+    logs = [];
+    logBox.textContent = "";
+    $("metricMode").textContent = "—";
+    $("metricFiles").textContent = "—";
+    $("metricSize").textContent = "—";
+    $("metricValidation").textContent = "—";
+    setStatus("", "Converting…", "Keep this page open while the playable is processed.");
+
+    try {
+      const htmlFile = selectedFiles.find(file => /\.html?$/i.test(file.name));
+      if (!htmlFile) throw new Error("No HTML file selected.");
+      const normalizedClickUrl = clickUrlInput.value.trim() || "https://www.google.com/";
+      const clickUrl = validClickUrl(normalizedClickUrl);
+      clickUrlInput.value = clickUrl;
+      log(`Reading ${htmlFile.name} (${formatBytes(htmlFile.size)})`);
+      const sourceHtml = await readText(htmlFile);
+      const resolved = await resolvePlayableHtml(sourceHtml, selectedFiles);
+      let mode = resolved.mode;
+      let indexHtml;
+      const outputFiles = new Map();
+      const embeddedBase64 = findEmbeddedZipBase64(resolved.html);
+
+      if (embeddedBase64) {
+        log(`Embedded ZIP detected (${formatBytes(Math.floor(embeddedBase64.length * 0.75))} encoded payload).`);
+        const extracted = await readZip(base64Bytes(embeddedBase64));
+        log(`Extracted ${extracted.size} embedded files.`);
+        wrapAdapter(extracted);
+        for (const [name, bytes] of extracted) outputFiles.set(name, bytes);
+
+        const cocos = extracted.has("@src/cc.adapter.js") && extracted.has("@src/polyfills.bundle.js") && extracted.has("@src/system.bundle.js");
+        if (cocos) {
+          indexHtml = buildCocosHtml(buildResourceMap(extracted), clickUrl);
+          mode = `${mode} + Cocos`;
+          log("Built the Google Ads Cocos bootstrap document.");
+        } else {
+          indexHtml = buildGenericHtml(resolved.html, clickUrl);
+          mode = `${mode} + embedded assets`;
+          log("Embedded archive is not the known Cocos structure; preserved its HTML and assets in generic mode.");
         }
+      } else {
+        indexHtml = buildGenericHtml(resolved.html, clickUrl);
+        log("No embedded ZIP detected; built a generic Google Ads document.");
+      }
 
-        document.getElementById('convert-btn').addEventListener('click', async () => {
-            if (!uploadedFile) return;
-            const btn = document.getElementById('convert-btn');
-            btn.textContent = 'Executing Python Logic Port...';
-            btn.disabled = true;
-            document.getElementById('log-box').innerHTML = '<div class="font-bold text-slate-400 mb-1">--- Live Processing Logs ---</div>';
+      for (const [path, file] of selectedExtraFiles(htmlFile, resolved.consumedFiles)) {
+        if (!outputFiles.has(path)) outputFiles.set(path, new Uint8Array(await file.arrayBuffer()));
+      }
+      outputFiles.set("index.html", textEncoder.encode(indexHtml));
 
-            try {
-                let htmlText = "";
-                const arrayBuffer = await uploadedFile.arrayBuffer();
-                htmlText = new TextDecoder().decode(arrayBuffer);
+      const validation = localValidation(indexHtml, outputFiles);
+      for (const [name, pass] of Object.entries(validation.checks)) log(`${pass ? "PASS" : "FAIL"}  ${name}`);
+      if (validation.remote.length) log(`Remote scripts: ${validation.remote.join(", ")}`);
+      if (validation.missingLocal.length) log(`Missing local scripts: ${validation.missingLocal.join(", ")}`);
+      if (!validation.pass) throw new Error("Local validation failed. See the report for the exact failed checks.");
 
-                // 1. Check for AppLovin payload
-                if (jsFile) {
-                    log("Processing optional companion JS file...");
-                    const jsContent = await jsFile.text();
-                    let payload = extractAppLovinPayload(jsContent);
-                    if (payload) {
-                        htmlText = payload;
-                        log("Extracted AppLovin payload from JS file.");
-                    }
-                } else {
-                    let payload = extractAppLovinPayload(htmlText);
-                    if (payload) {
-                        htmlText = payload;
-                        log("Extracted AppLovin payload from HTML file.");
-                    }
-                }
+      log(`Packaging ${outputFiles.size} files…`);
+      const zipBytes = await writeZip(outputFiles);
+      downloadBlob(zipBytes, "Google_Ads_Ready.zip");
 
-                // 2. Check for Embedded ZIP
-                let zipData = null;
-                let zipMatch = htmlText.match(/window\.__zip\s*=\s*"([^"]+)"/);
-                if (!zipMatch) zipMatch = htmlText.match(/window\.__zip\s*=\s*'([^']+)'/);
-                if (!zipMatch) zipMatch = htmlText.match(/__zip\s*[:=]\s*"([^"]+)"/);
-
-                if (zipMatch) {
-                    zipData = zipMatch[1].replace(/\\n/g, "").replace(/\\"/g, '"');
-                }
-                
-                const finalZip = new JSZip();
-
-                if (zipData) {
-                    log("Detected embedded base64 ZIP (__zip). Decoding and parsing assets...");
-                    
-                    const binaryData = base64ToUint8Array(zipData);
-                    const unzipped = await JSZip.loadAsync(binaryData);
-                    
-                    let resources = {};
-                    let extractedCount = 0;
-                    let filteredCount = 0;
-
-                    for (let fn of Object.keys(unzipped.files)) {
-                        
-                        const fileName = fn.split('/').pop();
-                        
-                        if (fileName.startsWith('._') || 
-                            fileName === '.DS_Store' || 
-                            fileName === 'Thumbs.db' || 
-                            fileName === 'desktop.ini' ||
-                            fn.includes('__MACOSX')) {
-                            filteredCount++;
-                            continue;
-                        }
-
-                        const entry = unzipped.files[fn];
-                        if (entry.dir) continue;
-                        
-                        let buffer = await entry.async("uint8array");
-                        
-                        if (buffer.length === 0) {
-                            filteredCount++;
-                            continue;
-                        }
-
-                        let isFakeImage = false;
-                        if (fileName.toLowerCase().match(/\.(png|jpe?g)$/)) {
-                            if (!isValidImage(buffer, fileName)) {
-                                log(`Soft-skipping invalid image (Failed Magic Number Check): ${fileName}. Kept in memory payload, removed from ZIP.`);
-                                isFakeImage = true; 
-                                filteredCount++;
-                            }
-                        }
-
-                        extractedCount++;
-
-                        if (fn === '__res') {
-                            const resText = await entry.async('text');
-                            try { Object.assign(resources, JSON.parse(resText)); } catch(e) {}
-                            continue;
-                        }
-
-                        let textContent = null;
-                        try {
-                            let textDecoder = new TextDecoder('utf-8', {fatal: true});
-                            textContent = textDecoder.decode(buffer);
-                        } catch(e) {
-                            textContent = null;
-                        }
-
-                        if (textContent !== null) {
-                            if (fn.endsWith('cc.adapter.js')) {
-                                if (!textContent.trim().startsWith('(function')) {
-                                    textContent = "(function () {\n" + textContent + "\n})();\n";
-                                }
-                            }
-                            resources[fn] = textContent;
-                            if (!isFakeImage) {
-                                finalZip.file(fn, textContent);
-                            }
-                        } else {
-                            let base64Content = await entry.async('base64');
-                            let mimeType = getMimeType(fileName);
-                            
-                            resources[fn] = `data:${mimeType};base64,${base64Content}`;
-                            
-                            if (!isFakeImage) {
-                                finalZip.file(fn, buffer);
-                            }
-                        }
-                    }
-                    
-                    log(`Extracted ${extractedCount} embedded files into memory. (Filtered ${filteredCount} junk/corrupt files)`);
-
-                    let resJsonString = JSON.stringify(resources);
-                    resJsonString = resJsonString.replace(/<\/script/gi, "<\\/script")
-                                                 .replace(/<!--/g, "<\\!--")
-                                                 .replace(/\u2028/g, "\\u2028")
-                                                 .replace(/\u2029/g, "\\u2029");
-
-                    htmlText = buildCleanCocosHtml(resJsonString);
-                    log("Built clean Cocos HTML with Python super_eval injected.");
-
-                } else {
-                    log("No embedded ZIP detected. Applying raw string replacements on HTML...");
-                    
-                    // FIXED: This will now inject the FULL MRAID object so Easybrain games don't crash
-                    htmlText = convertApplovinExit(htmlText);
-                    htmlText = convertCocosLoader(htmlText);
-
-                    let parser = new DOMParser();
-                    let doc = parser.parseFromString(htmlText, 'text/html');
-                    doc.querySelectorAll('script[src], link[href], iframe').forEach(tag => {
-                        let url = tag.getAttribute(tag.tagName === 'LINK' ? 'href' : 'src') || '';
-                        if (url.startsWith('http') && !url.includes('exitapi.js') && !url.includes('fonts.googleapis.com')) {
-                            tag.remove();
-                        }
-                    });
-                    htmlText = '<!DOCTYPE html>\n' + doc.documentElement.outerHTML;
-                    log("Injected Google Ads ExitApi and MRAID Polyfill.");
-                }
-
-                // Add index.html to final ZIP
-                finalZip.file('index.html', htmlText);
-
-                const contentUint8 = await finalZip.generateAsync({
-                    type: 'uint8array',
-                    compression: 'DEFLATE',
-                    compressionOptions: { level: 9 }
-                });
-                
-                const content = new Blob([contentUint8], { type: 'application/zip' });
-                const blobUrl = URL.createObjectURL(content);
-
-                document.getElementById('package-size').textContent = `${(content.size / 1024).toFixed(2)} KB`;
-                document.getElementById('results-section').classList.remove('hidden');
-
-                const dlBtn = document.getElementById('download-btn');
-                dlBtn.href = blobUrl;
-                dlBtn.download = 'Google_Ads_Ready.zip';
-
-                log('Google Ads ZIP package created successfully (Filtered JUNK Files & MRAID Mocked)!');
-                btn.textContent = 'Convert & Package for Google Ads';
-                btn.disabled = false;
-            } catch (err) {
-                log(`CRITICAL ERROR: ${err.message}`);
-                alert('Conversion error: ' + err.message);
-                btn.textContent = 'Convert & Package for Google Ads';
-                btn.disabled = false;
-            }
-        });
-    </script>
+      $("metricMode").textContent = mode;
+      $("metricFiles").textContent = String(outputFiles.size);
+      $("metricSize").textContent = formatBytes(zipBytes.length);
+      $("metricValidation").textContent = "PASS";
+      setStatus("pass", "Google Ads ZIP is ready", "Google_Ads_Ready.zip was created and the download has started.");
+      log("DONE  Google_Ads_Ready.zip");
+    } catch (error) {
+      console.error(error);
+      $("metricValidation").textContent = "FAIL";
+      setStatus("fail", "Conversion failed", error.message || String(error));
+      log(`ERROR  ${error.stack || error.message || error}`);
+    } finally {
+      convertButton.disabled = selectedFiles.filter(file => /\.html?$/i.test(file.name)).length !== 1;
+    }
+  });
+})();
+</script>
 </body>
 </html>

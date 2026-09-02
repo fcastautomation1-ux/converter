@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AppLovin & Cocos to Google Ads Converter</title>
+    <title>AppLovin to Google Ads Converter</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- JSZip for handling zip packages -->
@@ -12,18 +12,18 @@
 <body class="bg-slate-50 min-h-screen py-10 px-4">
     <div class="max-w-3xl mx-auto bg-white rounded-2xl shadow-xl overflow-hidden p-8">
         <header class="text-center mb-8">
-            <h1 class="text-3xl font-bold text-slate-800">Playable Ad to Google Ads Converter</h1>
-            <p class="text-slate-500 mt-2">Preserves multi-file game engine bundles (Cocos, Mintegral, AppLovin).</p>
+            <h1 class="text-3xl font-bold text-slate-800">AppLovin to Google Ads Converter</h1>
+            <p class="text-slate-500 mt-2">Robust ZIP & HTML processor with automated asset folder flattening.</p>
         </header>
 
         <!-- Upload Box -->
         <div class="mb-6">
-            <label class="block text-sm font-medium text-slate-700 mb-2">Upload Ad ZIP Package <span class="text-red-500">*</span></label>
+            <label class="block text-sm font-medium text-slate-700 mb-2">Upload Ad ZIP Archive or HTML File <span class="text-red-500">*</span></label>
             <div class="border-2 border-dashed border-slate-300 rounded-xl p-6 text-center hover:border-indigo-500 transition cursor-pointer bg-slate-50" id="drop-zone-html">
-                <input type="file" id="file-html" accept=".zip,.html" class="hidden">
+                <input type="file" id="file-html" accept=".html,.zip,.txt" class="hidden">
                 <div id="label-html">
-                    <p class="text-slate-600 font-medium">Drag & drop your ad ZIP file here, or <span class="text-indigo-600 underline">browse</span></p>
-                    <p class="text-xs text-slate-400 mt-1">Keeps all game folders and runtime scripts fully intact</p>
+                    <p class="text-slate-600 font-medium">Drag & drop your ZIP or HTML file here, or <span class="text-indigo-600 underline">browse</span></p>
+                    <p class="text-xs text-slate-400 mt-1">Handles nested asset folders and keeps all textures intact</p>
                 </div>
                 <div id="info-html" class="hidden text-indigo-600 font-semibold"></div>
             </div>
@@ -36,13 +36,13 @@
 
         <!-- Live Debug Log Box -->
         <div id="log-box" class="mt-6 p-4 bg-slate-900 text-emerald-400 font-mono text-xs rounded-xl h-44 overflow-y-auto hidden">
-            <div class="font-bold text-slate-400 mb-1">--- Live Processing Logs ---</div>
+            <div class="font-bold text-slate-400 mb-1">--- Live Extraction Logs ---</div>
         </div>
 
         <!-- Results Section -->
         <div id="results-section" class="hidden mt-8 border-t border-slate-200 pt-6">
             <div class="p-4 rounded-xl mb-6 bg-emerald-50 text-emerald-700 font-medium text-center">
-                Conversion Completed Successfully! Full Engine Bundle Preserved.
+                Conversion Completed Successfully! ZIP Ready for Google Ads.
             </div>
 
             <div class="grid grid-cols-3 gap-4 text-center mb-6">
@@ -70,7 +70,7 @@
         </div>
     </div>
 
-    <!-- Multi-File Engine Processing Script -->
+    <!-- Advanced ZIP Processing Engine -->
     <script>
         let uploadedFile = null;
 
@@ -100,46 +100,64 @@
         document.getElementById('convert-btn').addEventListener('click', async () => {
             if (!uploadedFile) return;
             const btn = document.getElementById('convert-btn');
-            btn.textContent = 'Processing Engine Bundle...';
+            btn.textContent = 'Unpacking ZIP & Processing Assets...';
             btn.disabled = true;
-            document.getElementById('log-box').innerHTML = '<div class="font-bold text-slate-400 mb-1">--- Live Processing Logs ---</div>';
+            document.getElementById('log-box').innerHTML = '<div class="font-bold text-slate-400 mb-1">--- Live Extraction Logs ---</div>';
 
             try {
-                let allFiles = {};
-                let indexPath = "";
+                let htmlText = "";
+                let extractedFiles = {};
                 const arrayBuffer = await uploadedFile.arrayBuffer();
 
-                // 1. Load ZIP archive
-                const unzipped = await JSZip.loadAsync(arrayBuffer);
-                let keys = Object.keys(unzipped.files);
-
-                // Find index.html anywhere in the folder structure
-                indexPath = keys.find(k => k.toLowerCase().endsWith('index.html'));
-                if (!indexPath) {
-                    throw new Error("No index.html found inside the uploaded ZIP package.");
+                let isZip = uploadedFile.name.endsWith('.zip');
+                const bytes = new Uint8Array(arrayBuffer);
+                if (bytes[0] === 0x50 && bytes[1] === 0x4B) {
+                    isZip = true;
                 }
 
-                let rootPrefix = indexPath.substring(0, indexPath.lastIndexOf('index.html'));
-                log(`Located entry point: ${indexPath}`);
+                if (isZip) {
+                    log('Detected ZIP archive container. Unpacking structure...');
+                    const unzipped = await JSZip.loadAsync(arrayBuffer);
+                    let keys = Object.keys(unzipped.files);
 
-                // Read all files and strip root folder nesting if present
-                for (let fn of keys) {
-                    const entry = unzipped.files[fn];
-                    if (!entry.dir) {
-                        let cleanName = fn;
-                        if (rootPrefix && fn.startsWith(rootPrefix)) {
-                            cleanName = fn.substring(rootPrefix.length);
-                        }
-                        if (cleanName) {
-                            allFiles[cleanName] = await entry.async('arraybuffer');
+                    // Find index.html even if nested inside a root folder (e.g. ad_folder/index.html)
+                    let indexPath = keys.find(k => k.toLowerCase().endsWith('/index.html') || k.toLowerCase() === 'index.html');
+                    
+                    let prefix = '';
+                    if (indexPath && indexPath !== 'index.html') {
+                        prefix = indexPath.substring(0, indexPath.lastIndexOf('index.html'));
+                        log(`Found nested root directory: ${prefix}`);
+                    }
+
+                    for (let fn of keys) {
+                        const entry = unzipped.files[fn];
+                        if (!entry.dir) {
+                            let relativePath = fn;
+                            if (prefix && fn.startsWith(prefix)) {
+                                relativePath = fn.substring(prefix.length);
+                            }
+
+                            if (relativePath) {
+                                if (relativePath.toLowerCase() === 'index.html') {
+                                    htmlText = await entry.async('text');
+                                    log(`Located main entry point: index.html`);
+                                } else {
+                                    extractedFiles[relativePath] = await entry.async('arraybuffer');
+                                    log(`Extracted asset: ${relativePath}`);
+                                }
+                            }
                         }
                     }
+                } else {
+                    htmlText = new TextDecoder().decode(arrayBuffer);
+                    log('Processed raw HTML file format.');
                 }
 
-                // Extract index.html text for modification
-                let htmlText = new TextDecoder().decode(allFiles['index.html']);
+                if (!htmlText) {
+                    throw new Error("Could not find index.html inside the uploaded package.");
+                }
 
-                // 2. Parse DOM and clean external 4th-party calls
+                // Parse DOM
                 const parser = new DOMParser();
                 const doc = parser.parseFromString(htmlText, 'text/html');
                 
@@ -149,23 +167,29 @@
                     doc.documentElement.prepend(head);
                 }
 
-                // Remove unauthorized external script/iframe trackers to pass 4th-party checks
+                // Clean 4th-party external scripts
                 doc.querySelectorAll('script[src], link[href], iframe').forEach(tag => {
                     const attr = tag.tagName === 'LINK' ? 'href' : 'src';
                     const url = tag.getAttribute(attr) || '';
                     if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('//')) {
                         if (!url.includes('fonts.googleapis.com') && !url.includes('ajax.googleapis.com')) {
                             tag.remove();
-                            log(`Cleaned external reference: ${url}`);
+                            log(`Cleaned external reference to ensure policy compliance.`);
                         }
                     }
                 });
 
-                // 3. Inject Google Ads clickTag & ExitApi interceptor
+                // Asset lazy load optimization
+                doc.querySelectorAll('img, iframe').forEach(el => {
+                    if (!el.hasAttribute('loading')) {
+                        el.setAttribute('loading', 'lazy');
+                    }
+                });
+
+                // Inject Google Ads clickTag & ExitApi interceptor
                 const exitScript = doc.createElement('script');
                 exitScript.textContent = `
                     var clickTag = "https://www.google.com";
-
                     window.open = function(url) {
                         if (typeof ExitApi !== 'undefined' && ExitApi.exit) {
                             ExitApi.exit();
@@ -175,26 +199,22 @@
                             window.open(window.clickTag || url, '_blank');
                         }
                     };
-
                     document.addEventListener('click', function(e) {
-                        let target = e.target.closest('a, button, .cta, .button, [id*="cta"], [class*="cta"], [id*="play"], [class*="play"]');
-                        if (target || e.clientX > window.innerWidth - 150 && e.clientY > window.innerHeight - 80) {
-                            if (typeof ExitApi !== 'undefined' && ExitApi.exit) {
-                                ExitApi.exit();
-                            } else {
-                                window.open(window.clickTag, '_blank');
-                            }
+                        if (typeof ExitApi !== 'undefined' && ExitApi.exit) {
+                            ExitApi.exit();
                         }
                     }, { capture: true, passive: true });
                 `;
                 head.appendChild(exitScript);
-                log('Injected Google Ads clickTag and ExitApi handlers.');
+                log('Injected Google Ads clickTag and exit handlers.');
 
-                allFiles['index.html'] = new TextEncoder().encode('<!DOCTYPE html>\n' + doc.documentElement.outerHTML);
+                const finalHtml = '<!DOCTYPE html>\n' + doc.documentElement.outerHTML;
 
-                // 4. Rebuild final multi-file ZIP package keeping all Cocos assets intact
+                // Build final clean ZIP package
                 const finalZip = new JSZip();
-                for (let [fn, data] of Object.entries(allFiles)) {
+                finalZip.file('index.html', finalHtml);
+
+                for (let [fn, data] of Object.entries(extractedFiles)) {
                     finalZip.file(fn, data);
                 }
 
@@ -208,7 +228,7 @@
                 dlBtn.href = blobUrl;
                 dlBtn.download = 'Google_Ads_Ready.zip';
 
-                log('Google Ads multi-file ZIP package generated successfully!');
+                log('Google Ads ZIP package created successfully with all assets preserved!');
                 btn.textContent = 'Convert & Package for Google Ads';
                 btn.disabled = false;
             } catch (err) {

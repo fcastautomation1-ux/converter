@@ -97,16 +97,28 @@
             log(`File selected: ${uploadedFile.name}`);
         });
 
-        // Mimics Python's extract_applovin_payload
+        // Mimics Python's extract_applovin_payload securely
         function extractAppLovinPayload(jsContent) {
-            let start = jsContent.indexOf('al_renderHtml({"html":"');
-            if (start === -1) return null;
-            start += 'al_renderHtml({"html":"'.length;
-            let end = jsContent.indexOf('"})', start);
-            if (end === -1) return null;
-            let payload = jsContent.substring(start, end);
-            return payload.replace(/\\"/g, '"').replace(/\\n/g, '\n').replace(/\\r/g, '\r').replace(/\\t/g, '\t').replace(/\\\//g, '/');
+            const match = jsContent.match(/al_renderHtml\(\s*(\{[\s\S]*?\})\s*\)/);
+            if (match) {
+                try {
+                    let jsonObj = JSON.parse(match[1]);
+                    if (jsonObj.html) return decodePayload(jsonObj.html);
+                } catch(e) {}
+                const htmlMatch = match[1].match(/["']html["']\s*:\s*["']([\s\S]*?)["']/);
+                if (htmlMatch) return decodePayload(htmlMatch[1]);
+            }
+            const strMatch = jsContent.match(/al_renderHtml\(\s*["']([\s\S]*?)["']\s*\)/);
+            if (strMatch) return decodePayload(strMatch[1]);
+            return null;
         }
+
+        function decodePayload(payload) {
+            return payload.replace(/\\"/g, '"').replace(/\\'/g, "'").replace(/\\n/g, '\n').replace(/\\r/g, '\r').replace(/\\t/g, '\t').replace(/\\\//g, '/');
+        }
+
+        // Safely broken up script tag to avoid crashing the browser's HTML parser
+        const sEnd = "</" + "script>";
 
         // Mimics Python's build_clean_cocos_html
         function buildCleanCocosHtml(resContent) {
@@ -126,7 +138,7 @@
     </style>
 
     <!-- Google Ads Official Exit API Script -->
-    <script type="text/javascript" src="https://tpc.googlesyndication.com/pagead/gadgets/html5/api/exitapi.js"><\/script>
+    <script type="text/javascript" src="https://tpc.googlesyndication.com/pagead/gadgets/html5/api/exitapi.js">${sEnd}
 
     <script type="text/javascript">
     window.clickTag = "https://www.google.com";
@@ -198,14 +210,14 @@
         delete resources[key];
     }
     window.super_eval = super_eval;
-    <\/script>
+    ${sEnd}
 
     <script>
         window.__res = ${resContent};
-    <\/script>
+    ${sEnd}
 
-    <script src="./@src/polyfills.bundle.js"><\/script>
-    <script src="./@src/system.bundle.js"><\/script>
+    <script src="./@src/polyfills.bundle.js">${sEnd}
+    <script src="./@src/system.bundle.js">${sEnd}
 
     <script type="systemjs-importmap">
     {
@@ -213,9 +225,9 @@
             "cc": "./cocos-js/cc.js"
         }
     }
-    <\/script>
+    ${sEnd}
 
-    <script src="./@src/cc.adapter.js"><\/script>
+    <script src="./@src/cc.adapter.js">${sEnd}
 </head>
 <body>
     <div id="GameDiv" cc_exact_fit_screen="true">
@@ -238,13 +250,14 @@
                 startPlayable();
             }
         })();
-    <\/script>
+    ${sEnd}
 </body>
 </html>`;
         }
 
         // Safe conversion of base64 to binary
         function base64ToUint8Array(base64) {
+            while (base64.length % 4 !== 0) base64 += '=';
             const binaryString = window.atob(base64);
             const len = binaryString.length;
             const bytes = new Uint8Array(len);
@@ -273,15 +286,38 @@
                     log("Extracted AppLovin payload.");
                 }
 
-                // 2. Check for Embedded ZIP (window.__zip)
+                // 2. Safe string extraction for Embedded ZIP (window.__zip) avoiding regex lockups
                 let zipData = null;
-                const zipMatch = htmlText.match(/(?:window\.)?__zip\s*[:=]\s*["']([^"']+)["']/);
+                const zipStartIdx = htmlText.indexOf('__zip');
+                
+                if (zipStartIdx !== -1) {
+                    let firstQuote = htmlText.indexOf('"', zipStartIdx);
+                    let firstSingle = htmlText.indexOf("'", zipStartIdx);
+                    
+                    let quoteChar = null;
+                    let startIdx = -1;
+                    
+                    if (firstQuote !== -1 && (firstSingle === -1 || firstQuote < firstSingle)) {
+                        quoteChar = '"';
+                        startIdx = firstQuote;
+                    } else if (firstSingle !== -1) {
+                        quoteChar = "'";
+                        startIdx = firstSingle;
+                    }
+                    
+                    if (startIdx !== -1 && startIdx < zipStartIdx + 30) {
+                        let endIdx = htmlText.indexOf(quoteChar, startIdx + 1);
+                        if (endIdx !== -1) {
+                            zipData = htmlText.substring(startIdx + 1, endIdx);
+                            zipData = zipData.replace(/[\n\r\s\t]+/g, "").replace(/\\n/g, "").replace(/\\"/g, '"').replace(/\\'/g, "'");
+                        }
+                    }
+                }
                 
                 const finalZip = new JSZip();
 
-                if (zipMatch) {
+                if (zipData) {
                     log("Detected embedded base64 ZIP (__zip). Decoding in browser...");
-                    zipData = zipMatch[1].replace(/\\n/g, "").replace(/\\"/g, '"');
                     
                     const binaryData = base64ToUint8Array(zipData);
                     const unzipped = await JSZip.loadAsync(binaryData);
@@ -296,9 +332,9 @@
                         
                         extractedCount++;
                         let ext = fn.split('.').pop().toLowerCase();
-                        let isText = ['js', 'json', 'txt', 'html', 'css'].includes(ext);
+                        let isText = ['js', 'json', 'txt', 'html', 'css', 'xml'].includes(ext);
 
-                        if (fn === '__res') {
+                        if (fn.endsWith('__res')) {
                             const resText = await entry.async('text');
                             try { Object.assign(resources, JSON.parse(resText)); } catch(e) {}
                             continue;
@@ -315,22 +351,22 @@
                             }
                             
                             resources[fn] = textContent;
-                            finalZip.file(fn, textContent); // add to physical zip
+                            finalZip.file(fn, textContent);
                         } else {
                             // Binary files to base64 Data URI
                             let base64Content = await entry.async('base64');
                             resources[fn] = "data:application/octet-stream;base64," + base64Content;
                             
                             let binaryBuffer = await entry.async('arraybuffer');
-                            finalZip.file(fn, binaryBuffer); // add to physical zip
+                            finalZip.file(fn, binaryBuffer);
                         }
                     }
                     
                     log(`Extracted ${extractedCount} embedded files into virtual directory.`);
 
-                    // 4. Safely serialize resources JSON
+                    // 4. Safely serialize resources JSON preventing HTML parser crashes
                     let resJsonString = JSON.stringify(resources)
-                        .replace(/<\/script/g, "<\\/script")
+                        .replace(new RegExp("<" + "/script", "gi"), "<\\/script")
                         .replace(/<!--/g, "<\\!--")
                         .replace(/\u2028/g, "\\u2028")
                         .replace(/\u2029/g, "\\u2029");

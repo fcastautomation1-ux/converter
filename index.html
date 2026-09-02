@@ -125,6 +125,9 @@
 
         const sEnd = "</" + "script>";
 
+        // ==========================================
+        // HELPER FUNCTIONS (RESTORED)
+        // ==========================================
         function isValidImage(buffer, filename) {
             const name = filename.toLowerCase();
             if (buffer.length < 8) return false;
@@ -154,6 +157,18 @@
                 case 'svg': return 'image/svg+xml';
                 default: return 'application/octet-stream';
             }
+        }
+
+        function base64ToUint8Array(base64) {
+            base64 = base64.replace(/[^A-Za-z0-9+/=]/g, "");
+            while (base64.length % 4 !== 0) base64 += '=';
+            const binaryString = window.atob(base64);
+            const len = binaryString.length;
+            const bytes = new Uint8Array(len);
+            for (let i = 0; i < len; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+            }
+            return bytes;
         }
 
         function extractAppLovinPayload(jsContent) {
@@ -400,6 +415,9 @@ ${sEnd}
 </html>`;
         };
 
+        // ==========================================
+        // MAIN EXECUTION
+        // ==========================================
         document.getElementById('convert-btn').addEventListener('click', async () => {
             if (!uploadedFile) return;
             const btn = document.getElementById('convert-btn');
@@ -421,18 +439,15 @@ ${sEnd}
                     payload = extractAppLovinPayload(jsContent);
                     if (payload) log("Extracted payload from manual JS file.");
                 } else {
-                    // Try to extract from the HTML first
                     payload = extractAppLovinPayload(htmlText);
                     if (payload) {
                         log("Extracted embedded payload directly from HTML file.");
                     } else {
-                        // If not in HTML, search for external .js links
                         const scriptRegex = /<script[^>]+src=["'](https?:\/\/[^"']+\.js(\?[^"']*)?)["'][^>]*>/gi;
                         let match;
                         let externalJsUrls = [];
                         
                         while ((match = scriptRegex.exec(htmlText)) !== null) {
-                            // ignore google ads / exitapi links
                             if (!match[1].includes('exitapi.js')) {
                                 externalJsUrls.push(match[1]);
                             }
@@ -515,7 +530,7 @@ ${sEnd}
                         let isFakeImage = false;
                         if (fileName.toLowerCase().match(/\.(png|jpe?g)$/)) {
                             if (!isValidImage(buffer, fileName)) {
-                                log(`Soft-skipping invalid image: ${fileName}.`);
+                                log(`Soft-skipping invalid image: ${fileName}. Kept in memory payload, removed from ZIP.`);
                                 isFakeImage = true; 
                                 filteredCount++;
                             }

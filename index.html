@@ -13,7 +13,7 @@
     <div class="max-w-3xl mx-auto bg-white rounded-2xl shadow-xl overflow-hidden p-8">
         <header class="text-center mb-8">
             <h1 class="text-3xl font-bold text-slate-800">Playable Ad to Google Ads Converter</h1>
-            <p class="text-slate-500 mt-2">1:1 Port of Python Backend. Strict UTF-8 Failsafes & Global Exit Routing.</p>
+            <p class="text-slate-500 mt-2">1:1 Port of Python Backend. Strict UTF-8 & Corrupt Image Filtering.</p>
         </header>
 
         <!-- Main Upload Box -->
@@ -392,7 +392,7 @@ ${sEnd}
                     }
                 }
 
-                // 2. Check for Embedded ZIP (1:1 port of embedded_zip_extractor.py)
+                // 2. Check for Embedded ZIP
                 let zipData = null;
                 let zipMatch = htmlText.match(/window\.__zip\s*=\s*"([^"]+)"/);
                 if (!zipMatch) zipMatch = htmlText.match(/window\.__zip\s*=\s*'([^']+)'/);
@@ -405,7 +405,6 @@ ${sEnd}
                 const finalZip = new JSZip();
 
                 if (zipData) {
-                    // ====== PATH A: BASE64 __ZIP DETECTED (Mirrors converter_2.py) ======
                     log("Detected embedded base64 ZIP (__zip). Decoding and parsing assets...");
                     
                     const binaryData = base64ToUint8Array(zipData);
@@ -413,15 +412,36 @@ ${sEnd}
                     
                     let resources = {};
                     let extractedCount = 0;
+                    let filteredCount = 0;
 
                     for (let fn of Object.keys(unzipped.files)) {
                         
-                        // FIX: Filter out hidden system files to prevent validation errors
-                        if (fn.includes('.DS_Store') || fn.includes('__MACOSX')) continue;
+                        // ==========================================
+                        // FIX: Aggressive Corrupt/Hidden File Filter 
+                        // ==========================================
+                        const fileName = fn.split('/').pop();
+                        
+                        // 1. Filter out hidden MacOS files, AppleDouble Resource Forks, and Windows thumbs
+                        if (fileName.startsWith('._') || 
+                            fileName === '.DS_Store' || 
+                            fileName === 'Thumbs.db' || 
+                            fileName === 'desktop.ini' ||
+                            fn.includes('__MACOSX')) {
+                            filteredCount++;
+                            continue;
+                        }
 
                         const entry = unzipped.files[fn];
                         if (entry.dir) continue;
                         
+                        let buffer = await entry.async("uint8array");
+                        
+                        // 2. Filter out 0-byte ghost files which Google Ads rejects as "Invalid Images"
+                        if (buffer.length === 0) {
+                            filteredCount++;
+                            continue;
+                        }
+
                         extractedCount++;
 
                         if (fn === '__res') {
@@ -430,10 +450,7 @@ ${sEnd}
                             continue;
                         }
 
-                        let buffer = await entry.async("uint8array");
                         let textContent = null;
-
-                        // STRICT UTF-8 FALLBACK (Mirrors Python's encoding="utf-8" vs "rb")
                         try {
                             let textDecoder = new TextDecoder('utf-8', {fatal: true});
                             textContent = textDecoder.decode(buffer);
@@ -456,9 +473,8 @@ ${sEnd}
                         }
                     }
                     
-                    log(`Extracted ${extractedCount} embedded files into memory.`);
+                    log(`Extracted ${extractedCount} embedded files into memory. (Filtered ${filteredCount} junk system files)`);
 
-                    // Mirror Python's safe_inline_script_text
                     let resJsonString = JSON.stringify(resources);
                     resJsonString = resJsonString.replace(/<\/script/gi, "<\\/script")
                                                  .replace(/<!--/g, "<\\!--")
@@ -469,13 +485,11 @@ ${sEnd}
                     log("Built clean Cocos HTML with Python super_eval injected.");
 
                 } else {
-                    // ====== PATH B: STANDARD HTML (Mirrors applovin_exit_converter_2.py & cocos_loader_converter_2.py) ======
                     log("No embedded ZIP detected. Applying raw string replacements on HTML...");
                     
                     htmlText = convertApplovinExit(htmlText);
                     htmlText = convertCocosLoader(htmlText);
 
-                    // 1:1 Port of html_processor.py -> Scrub 4th party external links
                     let parser = new DOMParser();
                     let doc = parser.parseFromString(htmlText, 'text/html');
                     doc.querySelectorAll('script[src], link[href], iframe').forEach(tag => {
@@ -485,20 +499,17 @@ ${sEnd}
                         }
                     });
                     htmlText = '<!DOCTYPE html>\n' + doc.documentElement.outerHTML;
-
                     log("Injected Google Ads ExitApi and SystemJS bootloader.");
                 }
 
                 // Add index.html to final ZIP
                 finalZip.file('index.html', htmlText);
 
-                // FIX: JSZip compression output, ensuring DEFLATE Level 9 and proper Blob mapping via Uint8Array
+                // JSZip compression output, ensuring DEFLATE Level 9 and proper Blob mapping via Uint8Array
                 const contentUint8 = await finalZip.generateAsync({
                     type: 'uint8array',
                     compression: 'DEFLATE',
-                    compressionOptions: {
-                        level: 9
-                    }
+                    compressionOptions: { level: 9 }
                 });
                 
                 const content = new Blob([contentUint8], { type: 'application/zip' });
@@ -511,7 +522,7 @@ ${sEnd}
                 dlBtn.href = blobUrl;
                 dlBtn.download = 'Google_Ads_Ready.zip';
 
-                log('Google Ads ZIP package created successfully (DEFLATE compressed)!');
+                log('Google Ads ZIP package created successfully (Filtered JUNK Files)!');
                 btn.textContent = 'Convert & Package for Google Ads';
                 btn.disabled = false;
             } catch (err) {

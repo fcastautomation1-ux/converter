@@ -124,25 +124,19 @@
 
         const sEnd = "</" + "script>";
 
-        // 1:1 Port of Python's validate_image() using Magic Numbers
         function isValidImage(buffer, filename) {
             const name = filename.toLowerCase();
-            if (buffer.length < 8) return false; // Too small to be an image
+            if (buffer.length < 8) return false;
 
             if (name.endsWith('.png')) {
-                // Real PNGs must start with: 89 50 4E 47
                 return buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4E && buffer[3] === 0x47;
             }
-            
             if (name.endsWith('.jpg') || name.endsWith('.jpeg')) {
-                // Real JPGs must start with: FF D8 FF
                 return buffer[0] === 0xFF && buffer[1] === 0xD8 && buffer[2] === 0xFF;
             }
-            
-            return true; // Not an image, skip validation
+            return true;
         }
 
-        // Helper to solve Canvas Tainting (MIME Type mapping)
         function getMimeType(filename) {
             const ext = filename.split('.').pop().toLowerCase();
             switch (ext) {
@@ -190,8 +184,19 @@ function exitAd(url){
         window.open(target, "_blank");
     }
 }
-window.mraid = window.mraid || {};
-window.mraid.open = function(url) { exitAd(url); };
+
+// FIXED: FULL MRAID MOCK API
+// Without this, ads that check mraid.getState() (like Easybrain) will crash and show a blank screen.
+window.mraid = window.mraid || {
+    addEventListener: function () {},
+    removeEventListener: function () {},
+    isViewable: function () { return true; },
+    getState: function () { return "default"; },
+    open: function (url) { exitAd(url); },
+    close: function () {}
+};
+window.mraid.open = function(url) { exitAd(url); }; // Safety override
+
 var originalWindowOpen = window.open;
 window.open = function(url, target, features) { exitAd(url); };
 
@@ -366,7 +371,6 @@ ${sEnd}
     <script>
         (function () {
             function startPlayable() {
-                // FIXED: Missing Bootloader Fallback 
                 if (typeof window.super_boot_engine === "function") {
                     window.super_boot_engine();
                     console.log("COCOS BOOT OK (super_boot_engine)");
@@ -458,7 +462,6 @@ ${sEnd}
                         
                         const fileName = fn.split('/').pop();
                         
-                        // 1. Filter out hidden MacOS files, AppleDouble Resource Forks, and Windows thumbs
                         if (fileName.startsWith('._') || 
                             fileName === '.DS_Store' || 
                             fileName === 'Thumbs.db' || 
@@ -473,20 +476,16 @@ ${sEnd}
                         
                         let buffer = await entry.async("uint8array");
                         
-                        // 2. Filter out 0-byte ghost files
                         if (buffer.length === 0) {
                             filteredCount++;
                             continue;
                         }
 
-                        // ==========================================
-                        // FIXED: Soft-Skipping Fake Images
-                        // ==========================================
                         let isFakeImage = false;
                         if (fileName.toLowerCase().match(/\.(png|jpe?g)$/)) {
                             if (!isValidImage(buffer, fileName)) {
                                 log(`Soft-skipping invalid image (Failed Magic Number Check): ${fileName}. Kept in memory payload, removed from ZIP.`);
-                                isFakeImage = true; // Soft-flag, do NOT 'continue' entirely
+                                isFakeImage = true; 
                                 filteredCount++;
                             }
                         }
@@ -514,19 +513,15 @@ ${sEnd}
                                 }
                             }
                             resources[fn] = textContent;
-                            // Only add to physical zip if it isn't a corrupt/fake image
                             if (!isFakeImage) {
                                 finalZip.file(fn, textContent);
                             }
                         } else {
                             let base64Content = await entry.async('base64');
-                            
-                            // FIXED: Canvas Tainting (MIME Type mapping)
                             let mimeType = getMimeType(fileName);
                             
                             resources[fn] = `data:${mimeType};base64,${base64Content}`;
                             
-                            // Only add to physical zip if it isn't a corrupt/fake image
                             if (!isFakeImage) {
                                 finalZip.file(fn, buffer);
                             }
@@ -547,6 +542,7 @@ ${sEnd}
                 } else {
                     log("No embedded ZIP detected. Applying raw string replacements on HTML...");
                     
+                    // FIXED: This will now inject the FULL MRAID object so Easybrain games don't crash
                     htmlText = convertApplovinExit(htmlText);
                     htmlText = convertCocosLoader(htmlText);
 
@@ -559,13 +555,12 @@ ${sEnd}
                         }
                     });
                     htmlText = '<!DOCTYPE html>\n' + doc.documentElement.outerHTML;
-                    log("Injected Google Ads ExitApi and SystemJS bootloader.");
+                    log("Injected Google Ads ExitApi and MRAID Polyfill.");
                 }
 
                 // Add index.html to final ZIP
                 finalZip.file('index.html', htmlText);
 
-                // JSZip compression output, ensuring DEFLATE Level 9 and proper Blob mapping via Uint8Array
                 const contentUint8 = await finalZip.generateAsync({
                     type: 'uint8array',
                     compression: 'DEFLATE',
@@ -582,7 +577,7 @@ ${sEnd}
                 dlBtn.href = blobUrl;
                 dlBtn.download = 'Google_Ads_Ready.zip';
 
-                log('Google Ads ZIP package created successfully (Filtered JUNK Files & Validated Images)!');
+                log('Google Ads ZIP package created successfully (Filtered JUNK Files & MRAID Mocked)!');
                 btn.textContent = 'Convert & Package for Google Ads';
                 btn.disabled = false;
             } catch (err) {

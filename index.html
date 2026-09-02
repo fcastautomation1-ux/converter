@@ -13,19 +13,30 @@
     <div class="max-w-3xl mx-auto bg-white rounded-2xl shadow-xl overflow-hidden p-8">
         <header class="text-center mb-8">
             <h1 class="text-3xl font-bold text-slate-800">Playable Ad to Google Ads Converter</h1>
-            <p class="text-slate-500 mt-2">Decodes embedded __zip base64 payloads and forces global ExitApi routing.</p>
+            <p class="text-slate-500 mt-2">Supports embedded __zip base64 payloads and optional JS loaders.</p>
         </header>
 
-        <!-- Upload Box -->
-        <div class="mb-6">
+        <!-- Main Upload Box (HTML or ZIP) -->
+        <div class="mb-4">
             <label class="block text-sm font-medium text-slate-700 mb-2">Upload Ad File (.html or .zip) <span class="text-red-500">*</span></label>
             <div class="border-2 border-dashed border-slate-300 rounded-xl p-6 text-center hover:border-indigo-500 transition cursor-pointer bg-slate-50" id="drop-zone-html">
                 <input type="file" id="file-html" accept=".html,.zip,.txt" class="hidden">
                 <div id="label-html">
                     <p class="text-slate-600 font-medium">Drag & drop your .html or .zip file here, or <span class="text-indigo-600 underline">browse</span></p>
-                    <p class="text-xs text-slate-400 mt-1">Safely constructs __res dictionary and bypasses CORS</p>
                 </div>
                 <div id="info-html" class="hidden text-indigo-600 font-semibold"></div>
+            </div>
+        </div>
+
+        <!-- Optional JS Upload Box -->
+        <div class="mb-6">
+            <label class="block text-sm font-medium text-slate-700 mb-2">Upload Companion JS Loader File <span class="text-slate-400 font-normal">(Optional)</span></label>
+            <div class="border-2 border-dashed border-slate-300 rounded-xl p-6 text-center hover:border-indigo-500 transition cursor-pointer bg-slate-50" id="drop-zone-js">
+                <input type="file" id="file-js" accept=".js,.txt" class="hidden">
+                <div id="label-js">
+                    <p class="text-slate-600 font-medium">Drag & drop optional JS loader here, or <span class="text-indigo-600 underline">browse</span></p>
+                </div>
+                <div id="info-js" class="hidden text-indigo-600 font-semibold"></div>
             </div>
         </div>
 
@@ -73,6 +84,7 @@
     <!-- Python-to-JS Ported Engine -->
     <script>
         let uploadedFile = null;
+        let jsFile = null;
 
         function log(message) {
             const box = document.getElementById('log-box');
@@ -82,6 +94,7 @@
             console.log(message);
         }
 
+        // HTML/ZIP File Upload Setup
         const dropZone = document.getElementById('drop-zone-html');
         const fileInput = document.getElementById('file-html');
         const infoDiv = document.getElementById('info-html');
@@ -92,9 +105,24 @@
             uploadedFile = e.target.files[0];
             labelDiv.classList.add('hidden');
             infoDiv.classList.remove('hidden');
-            infoDiv.textContent = `File: ${uploadedFile.name} (${(uploadedFile.size / (1024*1024)).toFixed(2)} MB)`;
+            infoDiv.textContent = `Main File: ${uploadedFile.name} (${(uploadedFile.size / (1024*1024)).toFixed(2)} MB)`;
             document.getElementById('convert-btn').disabled = false;
-            log(`File selected: ${uploadedFile.name}`);
+            log(`Main file selected: ${uploadedFile.name}`);
+        });
+
+        // Optional JS File Upload Setup
+        const dropZoneJs = document.getElementById('drop-zone-js');
+        const fileInputJs = document.getElementById('file-js');
+        const infoDivJs = document.getElementById('info-js');
+        const labelDivJs = document.getElementById('label-js');
+
+        dropZoneJs.addEventListener('click', () => fileInputJs.click());
+        fileInputJs.addEventListener('change', (e) => {
+            jsFile = e.target.files[0];
+            labelDivJs.classList.add('hidden');
+            infoDivJs.classList.remove('hidden');
+            infoDivJs.textContent = `JS File: ${jsFile.name}`;
+            log(`Optional JS file selected: ${jsFile.name}`);
         });
 
         function extractAppLovinPayload(jsContent) {
@@ -247,12 +275,26 @@
                 const arrayBuffer = await uploadedFile.arrayBuffer();
                 htmlText = new TextDecoder().decode(arrayBuffer);
 
-                let payload = extractAppLovinPayload(htmlText);
-                if (payload) {
-                    htmlText = payload;
-                    log("Extracted AppLovin payload.");
+                // 1. Process AppLovin payload from optional JS file OR main HTML
+                if (jsFile) {
+                    log("Processing optional companion JS file...");
+                    const jsContent = await jsFile.text();
+                    let payload = extractAppLovinPayload(jsContent);
+                    if (payload) {
+                        htmlText = payload;
+                        log("Extracted AppLovin payload from JS file.");
+                    } else {
+                        log("No payload found in JS file. Falling back to main HTML.");
+                    }
+                } else {
+                    let payload = extractAppLovinPayload(htmlText);
+                    if (payload) {
+                        htmlText = payload;
+                        log("Extracted AppLovin payload from HTML file.");
+                    }
                 }
 
+                // 2. Safe string extraction for Embedded ZIP avoiding browser regex lockups
                 let zipData = null;
                 let zipStartIdx = htmlText.indexOf('__zip');
                 
@@ -412,7 +454,7 @@
                     // 3. Serialize DOM back to string
                     htmlText = '<!DOCTYPE html>\n' + doc.documentElement.outerHTML;
 
-                    // 4. GLOBAL STRING REPLACEMENT: Mimics Python backend exactly to catch inline <div onclick="mraid.open()"> calls
+                    // 4. GLOBAL STRING REPLACEMENT: Mimics Python backend exactly to catch inline calls
                     htmlText = htmlText.replace(/mraid\.open\(/g, "exitAd(");
                     htmlText = htmlText.replace(/super_open\(/g, "exitAd(");
                     

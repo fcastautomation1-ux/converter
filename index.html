@@ -13,7 +13,7 @@
     <div class="max-w-3xl mx-auto bg-white rounded-2xl shadow-xl overflow-hidden p-8">
         <header class="text-center mb-8">
             <h1 class="text-3xl font-bold text-slate-800">Playable Ad to Google Ads Converter</h1>
-            <p class="text-slate-500 mt-2">Supports embedded __zip base64 payloads and optional JS loaders.</p>
+            <p class="text-slate-500 mt-2">Strictly mirrors Python raw-string logic for universal ExitApi routing.</p>
         </header>
 
         <!-- Main Upload Box (HTML or ZIP) -->
@@ -81,7 +81,6 @@
         </div>
     </div>
 
-    <!-- Python-to-JS Ported Engine -->
     <script>
         let uploadedFile = null;
         let jsFile = null;
@@ -275,7 +274,6 @@
                 const arrayBuffer = await uploadedFile.arrayBuffer();
                 htmlText = new TextDecoder().decode(arrayBuffer);
 
-                // 1. Process AppLovin payload from optional JS file OR main HTML
                 if (jsFile) {
                     log("Processing optional companion JS file...");
                     const jsContent = await jsFile.text();
@@ -294,7 +292,6 @@
                     }
                 }
 
-                // 2. Safe string extraction for Embedded ZIP avoiding browser regex lockups
                 let zipData = null;
                 let zipStartIdx = htmlText.indexOf('__zip');
                 
@@ -400,61 +397,10 @@
                     log("Injected super_eval and Google Ads interceptors.");
 
                 } else {
-                    // ======= STANDARD HTML FALLBACK BLOCK =======
-                    log("No embedded ZIP detected. Rebuilding standard HTML payload...");
-                    
-                    const parser = new DOMParser();
-                    const doc = parser.parseFromString(htmlText, 'text/html');
-                    
-                    let head = doc.querySelector('head');
-                    if (!head) {
-                        head = doc.createElement('head');
-                        doc.documentElement.prepend(head);
-                    }
+                    // ======= RAW STRING FALLBACK BLOCK =======
+                    log("No embedded ZIP detected. Applying raw string replacements...");
 
-                    // Remove 4th party calls
-                    doc.querySelectorAll('script[src], link[href], iframe').forEach(tag => {
-                        const attr = tag.tagName === 'LINK' ? 'href' : 'src';
-                        const url = tag.getAttribute(attr) || '';
-                        if (url.startsWith('http') && !url.includes('exitapi.js') && !url.includes('fonts.googleapis.com')) {
-                            tag.remove();
-                        }
-                    });
-
-                    // 1. Inject Official Google Exit API
-                    const exitApiScript = doc.createElement('script');
-                    exitApiScript.type = 'text/javascript';
-                    exitApiScript.src = 'https://tpc.googlesyndication.com/pagead/gadgets/html5/api/exitapi.js';
-                    head.insertBefore(exitApiScript, head.firstChild);
-
-                    // 2. Inject clickTag and exitAd function globally
-                    const exitScript = doc.createElement('script');
-                    exitScript.textContent = `
-                        var clickTag = "https://www.google.com";
-                        
-                        window.exitAd = function(url){
-                            if (typeof ExitApi !== 'undefined' && ExitApi.exit) {
-                                ExitApi.exit();
-                            } else {
-                                var target = url || clickTag;
-                                if(target) { window.open(target, "_blank"); }
-                            }
-                        };
-
-                        var originalWindowOpen = window.open;
-                        window.open = function(url, target, features) {
-                            window.exitAd(url);
-                        };
-
-                        window.mraid = window.mraid || {};
-                        window.mraid.open = function(url) { window.exitAd(url); };
-                    `;
-                    head.appendChild(exitScript);
-
-                    // 3. Serialize DOM back to string
-                    htmlText = '<!DOCTYPE html>\n' + doc.documentElement.outerHTML;
-
-                    // 4. GLOBAL STRING REPLACEMENT: Mimics Python backend exactly to catch inline calls
+                    // 1. GLOBAL STRING REPLACEMENT: Mimics Python backend exactly to catch inline calls
                     htmlText = htmlText.replace(/mraid\.open\(/g, "exitAd(");
                     htmlText = htmlText.replace(/super_open\(/g, "exitAd(");
                     
@@ -462,7 +408,42 @@
                     htmlText = htmlText.replace(/window\.location\.href\s*=\s*[^;>]+/gi, "exitAd();");
                     htmlText = htmlText.replace(/location\.href\s*=\s*[^;>]+/gi, "exitAd();");
 
-                    log("Injected Google Ads ExitApi handlers and applied global string overrides.");
+                    // 2. Build the Exit Script matching Python logic + Google Ads compliance
+                    const sEnd = "</" + "script>";
+                    const exitScript = `
+    <!-- Google Ads Official Exit API Script -->
+    <script type="text/javascript" src="https://tpc.googlesyndication.com/pagead/gadgets/html5/api/exitapi.js">${sEnd}
+    <script>
+    var clickTag = "https://www.google.com";
+
+    function exitAd(url){
+        var target = url || clickTag;
+        if (typeof ExitApi !== 'undefined' && ExitApi.exit) {
+            ExitApi.exit();
+        } else if (target) {
+            window.open(target, "_blank");
+        }
+    }
+    ${sEnd}
+`;
+
+                    // 3. Inject exit handler before closing head
+                    if (htmlText.indexOf("</head>") !== -1) {
+                        htmlText = htmlText.replace("</head>", exitScript + "\n</head>");
+                    } else {
+                        htmlText = exitScript + htmlText;
+                    }
+
+                    // 4. Clean 4th party external scripts using Regex to avoid DOMParser structural destruction
+                    htmlText = htmlText.replace(/<script[^>]+src=["'](https?:\/\/[^"']+)["'][^>]*>[\s\S]*?<\/\s*script>/gi, (match, url) => {
+                        if (url.includes('exitapi.js') || url.includes('fonts.googleapis.com') || url.includes('ajax.googleapis.com')) {
+                            return match; // Keep allowed links
+                        }
+                        log("Cleaned external script: " + url);
+                        return ''; // Strip unauthorized 4th-party links
+                    });
+
+                    log("Injected Google Ads ExitApi handlers using raw string replacements.");
                 }
 
                 // Add index.html to final ZIP

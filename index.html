@@ -142,6 +142,25 @@
             return true; // Not an image, skip validation
         }
 
+        // Helper to solve Canvas Tainting (MIME Type mapping)
+        function getMimeType(filename) {
+            const ext = filename.split('.').pop().toLowerCase();
+            switch (ext) {
+                case 'png': return 'image/png';
+                case 'jpg': case 'jpeg': return 'image/jpeg';
+                case 'gif': return 'image/gif';
+                case 'mp3': return 'audio/mpeg';
+                case 'wav': return 'audio/wav';
+                case 'mp4': return 'video/mp4';
+                case 'json': return 'application/json';
+                case 'js': return 'application/javascript';
+                case 'css': return 'text/css';
+                case 'html': return 'text/html';
+                case 'svg': return 'image/svg+xml';
+                default: return 'application/octet-stream';
+            }
+        }
+
         function extractAppLovinPayload(jsContent) {
             let start = jsContent.indexOf('al_renderHtml({"html":"');
             if (start === -1) return null;
@@ -347,11 +366,18 @@ ${sEnd}
     <script>
         (function () {
             function startPlayable() {
+                // FIXED: Missing Bootloader Fallback 
                 if (typeof window.super_boot_engine === "function") {
                     window.super_boot_engine();
-                    console.log("COCOS BOOT OK");
+                    console.log("COCOS BOOT OK (super_boot_engine)");
+                } else if (window.System && window.System.import) {
+                    window.System.import("./index.js").then(function () {
+                        console.log("COCOS BOOT OK (System.import)");
+                    }).catch(function (error) {
+                        console.error("COCOS BOOT FAILED (System.import)", error);
+                    });
                 } else {
-                    console.error("COCOS BOOT FAILED", "super_boot_engine is not available");
+                    console.error("COCOS BOOT FAILED", "No valid bootloader is available.");
                 }
             }
             if (document.readyState === "loading") {
@@ -454,13 +480,14 @@ ${sEnd}
                         }
 
                         // ==========================================
-                        // FIX: Python Image Verification Port
+                        // FIXED: Soft-Skipping Fake Images
                         // ==========================================
+                        let isFakeImage = false;
                         if (fileName.toLowerCase().match(/\.(png|jpe?g)$/)) {
                             if (!isValidImage(buffer, fileName)) {
-                                log(`Skipping invalid image (Failed Magic Number Check): ${fileName}`);
+                                log(`Soft-skipping invalid image (Failed Magic Number Check): ${fileName}. Kept in memory payload, removed from ZIP.`);
+                                isFakeImage = true; // Soft-flag, do NOT 'continue' entirely
                                 filteredCount++;
-                                continue;
                             }
                         }
 
@@ -487,11 +514,22 @@ ${sEnd}
                                 }
                             }
                             resources[fn] = textContent;
-                            finalZip.file(fn, textContent);
+                            // Only add to physical zip if it isn't a corrupt/fake image
+                            if (!isFakeImage) {
+                                finalZip.file(fn, textContent);
+                            }
                         } else {
                             let base64Content = await entry.async('base64');
-                            resources[fn] = "data:application/octet-stream;base64," + base64Content;
-                            finalZip.file(fn, buffer);
+                            
+                            // FIXED: Canvas Tainting (MIME Type mapping)
+                            let mimeType = getMimeType(fileName);
+                            
+                            resources[fn] = `data:${mimeType};base64,${base64Content}`;
+                            
+                            // Only add to physical zip if it isn't a corrupt/fake image
+                            if (!isFakeImage) {
+                                finalZip.file(fn, buffer);
+                            }
                         }
                     }
                     

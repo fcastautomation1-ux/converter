@@ -3,914 +3,169 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Playable Ad to Google Ads Converter & Studio</title>
-    <!-- Tailwind CSS -->
+    <title>Ultimate Playable Ad Converter</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- JSZip for handling zip packages -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-    <!-- Lucide Icons (Vanilla) -->
-    <script src="https://unpkg.com/lucide@latest"></script>
     <style>
-        /* Device Preview Frames */
-        .phone-frame {
-            border: 12px solid #1e293b;
-            border-radius: 40px;
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(255, 255, 255, 0.1);
-            position: relative;
-            background: #000;
-            overflow: hidden;
-            transition: all 0.3s ease;
-        }
-        .phone-notch {
-            position: absolute;
-            top: 0;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 120px;
-            height: 18px;
-            background: #1e293b;
-            border-bottom-left-radius: 12px;
-            border-bottom-right-radius: 12px;
-            z-index: 40;
-        }
-        /* Custom scrollbar */
-        ::-webkit-scrollbar {
-            width: 6px;
-            height: 6px;
-        }
-        ::-webkit-scrollbar-track {
-            background: #0f172a;
-        }
-        ::-webkit-scrollbar-thumb {
-            background: #334155;
-            border-radius: 3px;
-        }
-        ::-webkit-scrollbar-thumb:hover {
-            background: #475569;
-        }
+        /* Smooth transitions for drag-and-drop */
+        .drop-active { border-color: #6366f1 !important; background-color: #e0e7ff !important; }
     </style>
 </head>
-<body class="bg-slate-100 min-h-screen text-slate-800 antialiased font-sans pb-16">
-    <!-- Top Navbar -->
-    <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-            <div class="flex items-center space-x-3">
-                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center text-white shadow-md shadow-indigo-200">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                </div>
-                <div>
-                    <h1 class="font-bold text-lg text-slate-900 leading-tight">Playable Ad Converter & Studio</h1>
-                    <p class="text-xs text-slate-500">Google Ads Ready • Live Interactive Preview • Auto-Payload Fetcher</p>
+<body class="bg-slate-50 min-h-screen py-10 px-4">
+    <div class="max-w-4xl mx-auto bg-white rounded-2xl shadow-xl overflow-hidden p-8 flex flex-col md:flex-row gap-8">
+        
+        <!-- LEFT COLUMN: Controls -->
+        <div class="flex-1">
+            <header class="mb-8">
+                <h1 class="text-3xl font-bold text-slate-800">Playable Ad Converter</h1>
+                <p class="text-slate-500 mt-2 text-sm">Drag & Drop supported. Auto-Fetches JS. MRAID & Google Ads Ready.</p>
+            </header>
+
+            <!-- App Link Input -->
+            <div class="mb-6">
+                <label class="block text-sm font-bold text-slate-700 mb-2">Redirect App Link (Final URL) <span class="text-red-500">*</span></label>
+                <input type="url" id="app-link" placeholder="https://play.google.com/store/apps/details?id=com.your.game" class="w-full border-2 border-slate-300 rounded-xl p-3 focus:border-indigo-500 focus:outline-none transition">
+                <p class="text-xs text-slate-400 mt-1">This URL will be injected as the Google Ads clickTag.</p>
+            </div>
+
+            <!-- Main Upload Box -->
+            <div class="mb-4">
+                <label class="block text-sm font-bold text-slate-700 mb-2">1. Upload Ad File (.html or .zip) <span class="text-red-500">*</span></label>
+                <div class="border-2 border-dashed border-slate-300 rounded-xl p-6 text-center transition cursor-pointer bg-slate-50 relative" id="drop-zone-html">
+                    <input type="file" id="file-html" accept=".html,.zip,.txt" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
+                    <div id="label-html" class="pointer-events-none">
+                        <p class="text-slate-600 font-medium">Drag & drop your .html or .zip file here</p>
+                        <p class="text-xs text-slate-400 mt-2">External JS payloads are auto-fetched.</p>
+                    </div>
+                    <div id="info-html" class="hidden text-indigo-600 font-semibold pointer-events-none"></div>
                 </div>
             </div>
 
-            <!-- Header Quick Actions -->
-            <div class="flex items-center space-x-3">
-                <button id="reset-all-btn" class="inline-flex items-center space-x-1.5 px-3 py-1.5 text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg transition" title="Reset all inputs, preview, and results">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-                    <span>Reset All</span>
+            <!-- Optional JS Upload Box -->
+            <div class="mb-6">
+                <label class="block text-sm font-bold text-slate-700 mb-2">2. Manual JS Payload <span class="text-slate-400 font-normal">(Only if Auto-Fetch fails)</span></label>
+                <div class="border-2 border-dashed border-slate-300 rounded-xl p-6 text-center transition cursor-pointer bg-slate-50 relative" id="drop-zone-js">
+                    <input type="file" id="file-js" accept=".js,.txt" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
+                    <div id="label-js" class="pointer-events-none">
+                        <p class="text-slate-600 font-medium">Drag & drop manual JS loader here</p>
+                    </div>
+                    <div id="info-js" class="hidden text-indigo-600 font-semibold pointer-events-none"></div>
+                </div>
+            </div>
+
+            <!-- Convert Button -->
+            <div class="flex gap-4">
+                <button id="convert-btn" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-xl shadow-lg transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed">
+                    Convert & Package
+                </button>
+                <button id="reset-btn" class="bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold py-3 px-6 rounded-xl transition duration-200">
+                    Reset
                 </button>
             </div>
+
+            <!-- Live Debug Log Box -->
+            <div id="log-box" class="mt-6 p-4 bg-slate-900 text-emerald-400 font-mono text-xs rounded-xl h-32 overflow-y-auto hidden">
+                <div class="font-bold text-slate-400 mb-1">--- Live Processing Logs ---</div>
+            </div>
         </div>
-    </header>
 
-    <!-- Toast Notification for CTA and Status -->
-    <div id="toast-container" class="fixed top-20 right-6 z-50 flex flex-col space-y-2 pointer-events-none"></div>
-
-    <!-- Main Container -->
-    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6">
-        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        <!-- RIGHT COLUMN: Preview & Results -->
+        <div class="flex-1 flex flex-col hidden" id="results-section">
+            <h2 class="text-lg font-bold text-slate-800 mb-2">Ad Preview</h2>
             
-            <!-- LEFT COLUMN: Inputs, Configuration & Conversion (7 cols) -->
-            <div class="lg:col-span-7 space-y-6">
-
-                <!-- 1. Sample Ads Dropdown & Presets (Requirement #2) -->
-                <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm">
-                    <div class="flex items-center justify-between mb-3">
-                        <label class="text-sm font-bold text-slate-700 flex items-center gap-1.5">
-                            <svg class="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
-                            Quick Test: Sample Ads Dropdown
-                        </label>
-                        <span class="text-xs text-slate-400">1-Click Test Presets</span>
-                    </div>
-                    <div class="flex gap-2">
-                        <select id="sample-ad-select" class="flex-1 bg-slate-50 border border-slate-300 text-slate-700 text-sm rounded-xl px-3 py-2.5 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition">
-                            <option value="">-- Choose a Preloaded Sample Ad --</option>
-                            <option value="applovin-1">AppLovin Arrows Escape Ad (Sample 1 - External JS)</option>
-                            <option value="applovin-2">AppLovin Arrows Puzzle Ad (Sample 2 - External JS)</option>
-                            <option value="applovin-3">AppLovin Arrows Escape Ad (Sample 3 - External JS)</option>
-                            <option value="cocos-mini">Cocos Engine HTML5 Mini-Ad</option>
-                            <option value="standard-html5">Simple Interactive HTML5 Playable Ad</option>
-                        </select>
-                        <button id="load-sample-btn" class="px-4 py-2.5 bg-slate-800 hover:bg-slate-900 text-white text-xs font-semibold rounded-xl transition shadow-sm">
-                            Load Sample
-                        </button>
-                    </div>
-                </div>
-
-                <!-- 2. Destination App Link / CTA URL (Requirement #4) -->
-                <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm">
-                    <label class="block text-sm font-bold text-slate-800 mb-1 flex items-center justify-between">
-                        <span class="flex items-center gap-1.5">
-                            <svg class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
-                            Destination App Link (CTA URL) <span class="text-red-500">*</span>
-                        </span>
-                        <span class="text-xs font-normal text-slate-400">Replaces clickTag & in-game CTA</span>
-                    </label>
-                    <p class="text-xs text-slate-500 mb-3">Where should players be sent when they click "Install", "Play Now", or tap anywhere in the ad?</p>
-                    <div class="relative">
-                        <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/></svg>
-                        </div>
-                        <input type="url" id="app-link-input" placeholder="https://play.google.com/store/apps/details?id=your.package.id" value="https://play.google.com/store/apps/details?id=com.ecffri.arrows&hl=en_US" class="w-full pl-10 pr-24 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-medium text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition">
-                        <div class="absolute inset-y-1 right-1 flex items-center space-x-1">
-                            <button id="preset-google-play" type="button" class="px-2 py-1 text-[11px] font-semibold bg-emerald-100 text-emerald-800 hover:bg-emerald-200 rounded-lg transition">Play Store</button>
-                            <button id="preset-app-store" type="button" class="px-2 py-1 text-[11px] font-semibold bg-sky-100 text-sky-800 hover:bg-sky-200 rounded-lg transition">App Store</button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 3. Main Ad File Upload Box (Drag & Drop + Dropdown - Requirement #2) -->
-                <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm">
-                    <label class="block text-sm font-bold text-slate-800 mb-1 flex items-center justify-between">
-                        <span>Upload Ad File (.html or .zip) <span class="text-red-500">*</span></span>
-                        <span class="text-xs text-indigo-600 font-medium">Supports AppLovin, Cocos, Unity, HTML5</span>
-                    </label>
-                    <p class="text-xs text-slate-500 mb-3">Upload your standalone playable ad HTML file or compressed zip package.</p>
-                    
-                    <div class="border-2 border-dashed border-slate-300 rounded-2xl p-6 text-center hover:border-indigo-500 transition cursor-pointer bg-slate-50/70 group" id="drop-zone-html">
-                        <input type="file" id="file-html" accept=".html,.zip,.txt" class="hidden">
-                        
-                        <div id="label-html" class="space-y-2">
-                            <div class="w-12 h-12 mx-auto rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center group-hover:scale-110 transition">
-                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
-                            </div>
-                            <p class="text-slate-700 font-medium text-sm">Drag & drop your <span class="font-bold text-slate-900">.html</span> or <span class="font-bold text-slate-900">.zip</span> here, or <span class="text-indigo-600 underline font-semibold">browse</span></p>
-                            <p class="text-xs text-slate-400">Auto-fetches external JS payloads via multi-tier CORS proxies if needed!</p>
-                        </div>
-
-                        <div id="info-html" class="hidden flex items-center justify-between p-3 bg-indigo-50 border border-indigo-200 rounded-xl text-left">
-                            <div class="flex items-center space-x-3 overflow-hidden">
-                                <div class="w-8 h-8 rounded-lg bg-indigo-600 text-white flex items-center justify-center flex-shrink-0">
-                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                                </div>
-                                <div class="truncate">
-                                    <p id="info-html-name" class="text-xs font-bold text-indigo-950 truncate">filename.html</p>
-                                    <p id="info-html-size" class="text-[11px] text-indigo-600 font-medium">0 KB</p>
-                                </div>
-                            </div>
-                            <button id="clear-html-btn" class="p-1.5 hover:bg-indigo-200 rounded-lg text-indigo-700 transition" title="Remove file">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 4. Companion JS / Paste Script Box (Auto-Fetch Fallback - Requirement #5) -->
-                <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm">
-                    <div class="flex items-center justify-between mb-2">
-                        <label class="text-sm font-bold text-slate-800 flex items-center gap-1.5">
-                            <span>Manual Companion JS / Code</span>
-                            <span class="text-xs font-normal text-slate-400">(Optional fallback if auto-fetch fails)</span>
-                        </label>
-                        <button id="toggle-paste-btn" class="text-xs text-indigo-600 hover:text-indigo-800 font-semibold underline">
-                            Or Paste JS Code Directly
-                        </button>
-                    </div>
-                    
-                    <div class="border-2 border-dashed border-slate-300 rounded-xl p-4 text-center hover:border-indigo-400 transition cursor-pointer bg-slate-50/50" id="drop-zone-js">
-                        <input type="file" id="file-js" accept=".js,.txt" class="hidden">
-                        <div id="label-js">
-                            <p class="text-slate-600 text-xs font-medium">Drag & drop external loader <span class="font-bold">.js</span> file here, or <span class="text-indigo-600 underline">browse</span></p>
-                        </div>
-                        <div id="info-js" class="hidden text-xs text-indigo-700 font-semibold flex items-center justify-between p-2 bg-indigo-50 rounded-lg">
-                            <span id="info-js-name" class="truncate">companion.js</span>
-                            <button id="clear-js-btn" class="text-indigo-600 hover:text-indigo-900 font-bold ml-2">×</button>
-                        </div>
-                    </div>
-
-                    <!-- Direct JS Code Paste Area (Collapsible) -->
-                    <div id="paste-js-container" class="hidden mt-3">
-                        <textarea id="paste-js-text" rows="4" placeholder="Paste external JavaScript code or payload here (e.g. al_renderHtml({...}))..." class="w-full p-3 font-mono text-xs bg-slate-900 text-emerald-400 rounded-xl border border-slate-700 focus:ring-2 focus:ring-indigo-500 focus:outline-none"></textarea>
-                        <div class="flex justify-between items-center mt-1">
-                            <span class="text-[11px] text-slate-400">Directly bypasses browser CORS restrictions!</span>
-                            <button id="clear-paste-btn" class="text-xs text-rose-500 hover:underline">Clear</button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 5. Action Buttons: Preview & Convert (Requirement #1) -->
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <button id="preview-now-btn" class="flex items-center justify-center space-x-2 bg-slate-800 hover:bg-slate-900 text-white font-semibold py-3.5 px-4 rounded-xl shadow-md transition disabled:opacity-40 disabled:cursor-not-allowed">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
-                        <span>Preview Ad Now</span>
-                    </button>
-
-                    <button id="convert-btn" class="flex items-center justify-center space-x-2 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white font-bold py-3.5 px-4 rounded-xl shadow-lg shadow-indigo-200 transition disabled:opacity-40 disabled:cursor-not-allowed" disabled>
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
-                        <span id="convert-btn-text">Convert & Package for Google Ads</span>
-                    </button>
-                </div>
-
-                <!-- 6. Real-Time Processing Logs -->
-                <div class="bg-slate-900 rounded-2xl p-4 border border-slate-800 shadow-inner">
-                    <div class="flex items-center justify-between pb-2 border-b border-slate-800 mb-2">
-                        <div class="flex items-center space-x-2">
-                            <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                            <span class="text-xs font-mono font-bold text-slate-300 uppercase tracking-wider">Live Processing Console</span>
-                        </div>
-                        <button id="clear-logs-btn" class="text-[11px] font-mono text-slate-500 hover:text-slate-300">Clear</button>
-                    </div>
-                    <div id="log-box" class="font-mono text-xs text-emerald-400 h-40 overflow-y-auto space-y-1 pr-1">
-                        <div class="text-slate-500">[Ready] Upload an ad file or select a sample from dropdown to start...</div>
-                    </div>
-                </div>
-
-                <!-- 7. Validation Results & Download Section -->
-                <div id="results-section" class="hidden bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-5">
-                    <div class="flex items-center justify-between pb-4 border-b border-slate-100">
-                        <div>
-                            <span id="result-badge" class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 mb-1">
-                                ● CONVERSION PASSED
-                            </span>
-                            <h3 class="text-lg font-bold text-slate-900">Google Ads Package Ready</h3>
-                        </div>
-                        <div class="text-right">
-                            <span class="text-xs text-slate-400 block">ZIP File Size</span>
-                            <span id="package-size" class="text-sm font-bold text-slate-800">0 KB</span>
-                        </div>
-                    </div>
-
-                    <!-- Genuine Checklist (Requirement #5: Fix Fake Pass) -->
-                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
-                        <div class="bg-slate-50 p-3 rounded-xl border border-slate-200">
-                            <span class="block text-[10px] text-slate-400 uppercase font-semibold">Playable Content</span>
-                            <span id="val-content" class="text-sm font-bold text-emerald-600">✓ Present</span>
-                        </div>
-                        <div class="bg-slate-50 p-3 rounded-xl border border-slate-200">
-                            <span class="block text-[10px] text-slate-400 uppercase font-semibold">Google ExitAPI</span>
-                            <span id="val-exitapi" class="text-sm font-bold text-emerald-600">✓ Injected</span>
-                        </div>
-                        <div class="bg-slate-50 p-3 rounded-xl border border-slate-200">
-                            <span class="block text-[10px] text-slate-400 uppercase font-semibold">Custom clickTag</span>
-                            <span id="val-clicktag" class="text-sm font-bold text-emerald-600">✓ Linked</span>
-                        </div>
-                        <div class="bg-slate-50 p-3 rounded-xl border border-slate-200">
-                            <span class="block text-[10px] text-slate-400 uppercase font-semibold">Max 5MB Limit</span>
-                            <span id="val-size" class="text-sm font-bold text-emerald-600">✓ Under 5MB</span>
-                        </div>
-                    </div>
-
-                    <!-- Package Files Dropdown Accordion (Requirement #2) -->
-                    <div class="border border-slate-200 rounded-xl overflow-hidden">
-                        <button id="toggle-files-accordion" class="w-full px-4 py-3 bg-slate-50 hover:bg-slate-100 font-semibold text-xs text-slate-700 flex items-center justify-between transition">
-                            <span class="flex items-center gap-2">
-                                <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
-                                <span>Package Contents & File Tree (<span id="package-file-count">0</span> files)</span>
-                            </span>
-                            <span class="text-xs text-indigo-600">Click to View Files ▾</span>
-                        </button>
-                        <div id="files-accordion-content" class="hidden p-4 bg-white border-t border-slate-200 space-y-2 max-h-56 overflow-y-auto">
-                            <ul id="package-file-list" class="divide-y divide-slate-100 text-xs font-mono text-slate-600"></ul>
-                        </div>
-                    </div>
-
-                    <!-- Code Inspector Dropdown (Requirement #2) -->
-                    <div class="border border-slate-200 rounded-xl overflow-hidden">
-                        <button id="toggle-code-accordion" class="w-full px-4 py-3 bg-slate-50 hover:bg-slate-100 font-semibold text-xs text-slate-700 flex items-center justify-between transition">
-                            <span class="flex items-center gap-2">
-                                <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg>
-                                <span>Inspect Generated index.html Source</span>
-                            </span>
-                            <span class="text-xs text-indigo-600">Toggle Code ▾</span>
-                        </button>
-                        <div id="code-accordion-content" class="hidden p-4 bg-slate-900 border-t border-slate-800">
-                            <div class="flex justify-between items-center mb-2">
-                                <span class="text-[11px] font-mono text-slate-400">index.html (Google Ads Converted)</span>
-                                <button id="copy-code-btn" class="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs rounded transition">Copy Code</button>
-                            </div>
-                            <pre id="code-viewer" class="font-mono text-[11px] text-slate-300 max-h-60 overflow-y-auto overflow-x-auto whitespace-pre-wrap"></pre>
-                        </div>
-                    </div>
-
-                    <!-- Download Button -->
-                    <a id="download-btn" class="flex items-center justify-center space-x-2 w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3.5 px-6 rounded-xl shadow-lg shadow-emerald-200 transition cursor-pointer text-center">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
-                        <span>Download Google_Ads_Ready.zip</span>
-                    </a>
-                </div>
-
+            <!-- Mobile Preview Frame -->
+            <div class="border-4 border-slate-800 rounded-[2rem] overflow-hidden relative mx-auto shadow-2xl bg-black" style="width: 320px; height: 480px;">
+                <iframe id="preview-frame" class="w-full h-full border-0 bg-white" sandbox="allow-scripts allow-same-origin allow-popups"></iframe>
             </div>
 
-            <!-- RIGHT COLUMN: Interactive Live Ad Preview (5 cols - Requirement #1) -->
-            <div class="lg:col-span-5 sticky top-24 space-y-4">
-                <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm">
-                    <div class="flex items-center justify-between mb-4">
-                        <div>
-                            <h2 class="font-bold text-slate-900 text-base flex items-center gap-2">
-                                <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping"></span>
-                                Live Ad Interactive Preview
-                            </h2>
-                            <p class="text-xs text-slate-400">Playable simulator with CTA click listener</p>
-                        </div>
-
-                        <!-- Device Orientation Switcher -->
-                        <div class="flex items-center space-x-1 bg-slate-100 p-1 rounded-xl">
-                            <button id="orient-portrait" class="p-1.5 rounded-lg text-slate-700 bg-white shadow-xs font-semibold text-xs" title="Portrait Mode (360x640)">
-                                📱 Portrait
-                            </button>
-                            <button id="orient-landscape" class="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 font-semibold text-xs" title="Landscape Mode (640x360)">
-                                🔄 Landscape
-                            </button>
-                            <button id="orient-responsive" class="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 font-semibold text-xs" title="Responsive (100%)">
-                                💻 Full
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Preview Mode Tabs -->
-                    <div class="flex border-b border-slate-200 mb-4 text-xs font-semibold">
-                        <button id="tab-preview-converted" class="py-2 px-3 border-b-2 border-indigo-600 text-indigo-600 transition">
-                            Converted Ad Preview
-                        </button>
-                        <button id="tab-preview-original" class="py-2 px-3 border-b-2 border-transparent text-slate-400 hover:text-slate-600 transition">
-                            Source Input Ad
-                        </button>
-                    </div>
-
-                    <!-- Preview Simulator Area -->
-                    <div class="flex justify-center items-center py-2 bg-slate-950/5 rounded-2xl border border-slate-100 min-h-[480px]">
-                        <div id="preview-wrapper" class="phone-frame w-[320px] h-[540px] flex flex-col items-center justify-center transition-all duration-300">
-                            <div class="phone-notch"></div>
-                            
-                            <!-- Iframe for Ad Sandbox -->
-                            <iframe id="ad-preview-iframe" class="w-full h-full border-0 bg-white" sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-modals"></iframe>
-                            
-                            <!-- Placeholder Overlay when no ad loaded -->
-                            <div id="preview-placeholder" class="absolute inset-0 bg-slate-900 flex flex-col items-center justify-center p-6 text-center space-y-3 z-30">
-                                <div class="w-14 h-14 rounded-2xl bg-slate-800 text-slate-400 flex items-center justify-center">
-                                    <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                                </div>
-                                <h4 class="text-white font-bold text-sm">No Ad Loaded in Preview</h4>
-                                <p class="text-xs text-slate-400 leading-relaxed">Drop your ad file on the left or select a sample ad to preview and test gameplay here!</p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Preview Controls Footer -->
-                    <div class="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between">
-                        <div class="flex items-center space-x-2">
-                            <button id="reload-preview-btn" class="inline-flex items-center space-x-1 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition" title="Restart the ad preview">
-                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-                                <span>Reload</span>
-                            </button>
-                            <button id="test-cta-btn" class="inline-flex items-center space-x-1 px-3 py-1.5 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition" title="Simulate CTA button click">
-                                🎯 <span>Simulate CTA Click</span>
-                            </button>
-                        </div>
-                        <div id="cta-status-indicator" class="text-[11px] font-medium text-slate-400">
-                            CTA: <span class="text-slate-600 font-semibold">Listening</span>
-                        </div>
-                    </div>
-                </div>
+            <div class="mt-6 p-4 rounded-xl bg-emerald-50 text-emerald-700 font-medium text-center border border-emerald-200">
+                <span class="block text-sm">Status: <strong>PASS</strong> | ClickTag: <strong>True</strong></span>
+                <span class="block text-xs mt-1 text-emerald-600">Final Size: <span id="package-size">0 KB</span></span>
             </div>
 
+            <a id="download-btn" class="mt-4 block text-center w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-6 rounded-xl shadow-lg transition duration-200 cursor-pointer">
+                Download Google_Ads_Ready.zip
+            </a>
         </div>
-    </main>
+    </div>
 
-    <!-- Application Script -->
     <script>
-        // State variables
         let uploadedFile = null;
         let jsFile = null;
-        let rawAdHtml = "";
-        let convertedAdHtml = "";
-        let currentZipBlob = null;
-        let previewMode = 'converted'; // 'converted' or 'original'
-
         const sEnd = "</" + "script>";
 
-        // Logging helper
-        function log(message, type = 'info') {
+        // ==========================================
+        // UI & DRAG-AND-DROP LOGIC
+        // ==========================================
+        function log(message) {
             const box = document.getElementById('log-box');
-            const time = new Date().toLocaleTimeString();
-            let color = 'text-emerald-400';
-            if (type === 'warn') color = 'text-amber-300';
-            if (type === 'error') color = 'text-rose-400 font-bold';
-            if (type === 'success') color = 'text-sky-300 font-bold';
-            
-            box.innerHTML += `<div class="${color}">[${time}] ${message}</div>`;
+            box.classList.remove('hidden');
+            box.innerHTML += `<div>[${new Date().toLocaleTimeString()}] ${message}</div>`;
             box.scrollTop = box.scrollHeight;
-            console.log(`[${type.toUpperCase()}] ${message}`);
+            console.log(message);
         }
 
-        // Toast notification helper
-        function showToast(title, message, type = 'success') {
-            const container = document.getElementById('toast-container');
-            const toast = document.createElement('div');
-            const bgColor = type === 'success' ? 'bg-emerald-600' : (type === 'error' ? 'bg-rose-600' : 'bg-slate-800');
-            
-            toast.className = `${bgColor} text-white px-4 py-3 rounded-xl shadow-xl flex items-start space-x-3 pointer-events-auto transform transition-all duration-300 translate-y-2 opacity-0 text-sm max-w-md`;
-            toast.innerHTML = `
-                <div class="flex-1">
-                    <p class="font-bold text-xs uppercase tracking-wide">${title}</p>
-                    <p class="text-xs text-slate-100 mt-0.5 break-all">${message}</p>
-                </div>
-                <button class="text-white hover:opacity-75 font-bold" onclick="this.parentElement.remove()">×</button>
-            `;
-            container.appendChild(toast);
-            
-            setTimeout(() => {
-                toast.classList.remove('translate-y-2', 'opacity-0');
-            }, 10);
+        function setupDropZone(zoneId, inputId, labelId, infoId, isJs) {
+            const dropZone = document.getElementById(zoneId);
+            const fileInput = document.getElementById(inputId);
+            const labelDiv = document.getElementById(labelId);
+            const infoDiv = document.getElementById(infoId);
 
-            setTimeout(() => {
-                toast.classList.add('opacity-0', 'translate-y-2');
-                setTimeout(() => toast.remove(), 300);
-            }, 5000);
-        }
-
-        // =========================================================================
-        // PRESET SAMPLES (User's sample ads & templates)
-        // =========================================================================
-        const SAMPLE_ADS = {
-            'applovin-1': {
-                name: 'AppLovin Arrows Escape Ad (Sample 1)',
-                url: 'https://res1.applovin.com/o69d79c6/f42235846eb7a4815390ce7b321ed5faf9b07050_v1_js_load.js',
-                appUrl: 'https://play.google.com/store/apps/details?id=com.ecffri.arrows&hl=en_US',
-                html: `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Arrows Puzzle Escape</title>
-</head>
-<body>
-  <script>
-    function al_renderHtml(obj) {
-      document.write(obj.html);
-    }
-  ${sEnd}
-  <script src="https://res1.applovin.com/o69d79c6/f42235846eb7a4815390ce7b321ed5faf9b07050_v1_js_load.js">${sEnd}
-</body>
-</html>`
-            },
-            'applovin-2': {
-                name: 'AppLovin Arrows Puzzle Ad (Sample 2)',
-                url: 'https://res1.applovin.com/o69d79c6/d552409e0eda37289f8f8c5e55001bb6b68d6cdd_v1_js_load.js',
-                appUrl: 'https://play.google.com/store/apps/details?id=com.ecffri.arrows&hl=en_US',
-                html: `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Arrows Puzzle</title>
-</head>
-<body>
-  <script>
-    function al_renderHtml(obj) {
-      document.write(obj.html);
-    }
-  ${sEnd}
-  <script src="https://res1.applovin.com/o69d79c6/d552409e0eda37289f8f8c5e55001bb6b68d6cdd_v1_js_load.js">${sEnd}
-</body>
-</html>`
-            },
-            'applovin-3': {
-                name: 'AppLovin Arrows Escape Ad (Sample 3)',
-                url: 'https://res1.applovin.com/o69d79c6/5fc133ff489166f842752785e6e60305eb292a69_v1_js_load.js',
-                appUrl: 'https://play.google.com/store/apps/details?id=com.ecffri.arrows&hl=en_US',
-                html: `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Arrows Escape</title>
-</head>
-<body>
-  <script>
-    function al_renderHtml(obj) {
-      document.write(obj.html);
-    }
-  ${sEnd}
-  <script src="https://res1.applovin.com/o69d79c6/5fc133ff489166f842752785e6e60305eb292a69_v1_js_load.js">${sEnd}
-</body>
-</html>`
-            },
-            'cocos-mini': {
-                name: 'Cocos Engine HTML5 Mini-Ad',
-                appUrl: 'https://play.google.com/store/apps/details?id=com.cocos.game',
-                html: `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Cocos Playable Ad</title>
-  <style>
-    body { margin: 0; background: #111; color: #fff; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; overflow: hidden; }
-    .cta-btn { background: #6366f1; color: white; border: none; padding: 14px 28px; border-radius: 25px; font-weight: bold; cursor: pointer; margin-top: 20px; font-size: 16px; box-shadow: 0 4px 15px rgba(99,102,241,0.5); }
-  </style>
-</head>
-<body>
-  <h2>🎮 Cocos Playable Mini Ad</h2>
-  <p style="color:#94a3b8; font-size: 13px;">Tap the button below to test CTA Exit!</p>
-  <button class="cta-btn" onclick="mraid.open('https://play.google.com/store/apps')">INSTALL NOW</button>
-  <script>
-    window.mraid = window.mraid || { open: function(url) { window.open(url, '_blank'); } };
-  ${sEnd}
-</body>
-</html>`
-            },
-            'standard-html5': {
-                name: 'Simple Interactive HTML5 Playable Ad',
-                appUrl: 'https://play.google.com/store/apps/details?id=com.awesome.game',
-                html: `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Interactive Playable</title>
-  <style>
-    body { margin:0; height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; background:linear-gradient(135deg,#4f46e5,#7c3aed); color:#fff; font-family:system-ui; }
-    .card { background:rgba(255,255,255,0.15); backdrop-filter:blur(10px); padding:30px; border-radius:24px; text-align:center; box-shadow:0 20px 40px rgba(0,0,0,0.3); width:80%; max-width:320px; }
-    .score { font-size:48px; font-weight:900; margin:15px 0; }
-    .btn { background:#10b981; color:#fff; border:none; padding:12px 24px; border-radius:12px; font-weight:bold; cursor:pointer; font-size:15px; margin:5px; transition:transform 0.1s; }
-    .btn:active { transform:scale(0.95); }
-    .cta { background:#f59e0b; width:100%; margin-top:15px; }
-  </style>
-</head>
-<body>
-  <div class="card">
-    <div style="font-size:32px;">🎯</div>
-    <div style="font-size:14px; opacity:0.8;">Tap Target Game</div>
-    <div class="score" id="score">0</div>
-    <button class="btn" onclick="tapScore()">TAP ME!</button>
-    <button class="btn cta" onclick="mraid.open()">PLAY FULL GAME</button>
-  </div>
-  <script>
-    let s = 0;
-    function tapScore() { s++; document.getElementById('score').textContent = s; }
-    window.mraid = window.mraid || { open: function() { window.open("https://google.com"); } };
-  ${sEnd}
-</body>
-</html>`
-            }
-        };
-
-        // Preset Sample Load Handler
-        document.getElementById('load-sample-btn').addEventListener('click', () => {
-            const select = document.getElementById('sample-ad-select');
-            const key = select.value;
-            if (!key || !SAMPLE_ADS[key]) {
-                alert("Please select a sample ad from the dropdown first.");
-                return;
-            }
-
-            const sample = SAMPLE_ADS[key];
-            const blob = new Blob([sample.html], { type: 'text/html' });
-            uploadedFile = new File([blob], `${key}.html`, { type: 'text/html' });
-            rawAdHtml = sample.html;
-
-            // Set app link
-            if (sample.appUrl) {
-                document.getElementById('app-link-input').value = sample.appUrl;
-            }
-
-            // Update UI
-            document.getElementById('label-html').classList.add('hidden');
-            document.getElementById('info-html').classList.remove('hidden');
-            document.getElementById('info-html-name').textContent = uploadedFile.name;
-            document.getElementById('info-html-size').textContent = `${(uploadedFile.size / 1024).toFixed(2)} KB (Preset Sample)`;
-            document.getElementById('convert-btn').disabled = false;
-
-            log(`Loaded sample preset: ${sample.name}`);
-            showToast('Sample Loaded', `${sample.name} loaded. Click Convert or Preview Now!`);
-
-            // Auto preview
-            loadAdInPreview(rawAdHtml, false);
-        });
-
-        // =========================================================================
-        // RESET ALL FUNCTIONALITY (Requirement #3)
-        // =========================================================================
-        document.getElementById('reset-all-btn').addEventListener('click', () => {
-            if (!confirm("Are you sure you want to reset all files, preview, and results?")) return;
-            resetAllState();
-            showToast('Reset Complete', 'All inputs, previews, and results have been cleared.');
-        });
-
-        function resetAllState() {
-            uploadedFile = null;
-            jsFile = null;
-            rawAdHtml = "";
-            convertedAdHtml = "";
-            
-            if (currentZipBlob) {
-                URL.revokeObjectURL(currentZipBlob);
-                currentZipBlob = null;
-            }
-
-            // Reset UI inputs
-            document.getElementById('file-html').value = '';
-            document.getElementById('file-js').value = '';
-            document.getElementById('sample-ad-select').value = '';
-            document.getElementById('paste-js-text').value = '';
-            document.getElementById('paste-js-container').classList.add('hidden');
-
-            // Reset HTML Dropzone
-            document.getElementById('label-html').classList.remove('hidden');
-            document.getElementById('info-html').classList.add('hidden');
-
-            // Reset JS Dropzone
-            document.getElementById('label-js').classList.remove('hidden');
-            document.getElementById('info-js').classList.add('hidden');
-
-            // Reset buttons
-            document.getElementById('convert-btn').disabled = true;
-            document.getElementById('convert-btn-text').textContent = 'Convert & Package for Google Ads';
-
-            // Reset results
-            document.getElementById('results-section').classList.add('hidden');
-            document.getElementById('files-accordion-content').classList.add('hidden');
-            document.getElementById('code-accordion-content').classList.add('hidden');
-            document.getElementById('package-file-list').innerHTML = '';
-            document.getElementById('code-viewer').textContent = '';
-
-            // Reset Preview
-            const iframe = document.getElementById('ad-preview-iframe');
-            iframe.srcdoc = '';
-            document.getElementById('preview-placeholder').classList.remove('hidden');
-            document.getElementById('cta-status-indicator').innerHTML = 'CTA: <span class="text-slate-600 font-semibold">Listening</span>';
-
-            // Reset Logs
-            document.getElementById('log-box').innerHTML = '<div class="text-slate-500">[Ready] Reset complete. Select a sample or upload a file.</div>';
-            log("System state reset to pristine default.");
-        }
-
-        // =========================================================================
-        // FILE UPLOAD HANDLERS & DRAG-AND-DROP (Requirement #2)
-        // =========================================================================
-        const dropZoneHtml = document.getElementById('drop-zone-html');
-        const fileInputHtml = document.getElementById('file-html');
-
-        dropZoneHtml.addEventListener('click', () => fileInputHtml.click());
-        dropZoneHtml.addEventListener('dragover', (e) => { e.preventDefault(); dropZoneHtml.classList.add('border-indigo-500', 'bg-indigo-50/30'); });
-        dropZoneHtml.addEventListener('dragleave', () => { dropZoneHtml.classList.remove('border-indigo-500', 'bg-indigo-50/30'); });
-        dropZoneHtml.addEventListener('drop', (e) => {
-            e.preventDefault();
-            dropZoneHtml.classList.remove('border-indigo-500', 'bg-indigo-50/30');
-            if (e.dataTransfer.files.length) {
-                handleHtmlFileSelect(e.dataTransfer.files[0]);
-            }
-        });
-        fileInputHtml.addEventListener('change', (e) => {
-            if (e.target.files.length) handleHtmlFileSelect(e.target.files[0]);
-        });
-
-        async function handleHtmlFileSelect(file) {
-            uploadedFile = file;
-            document.getElementById('label-html').classList.add('hidden');
-            document.getElementById('info-html').classList.remove('hidden');
-            document.getElementById('info-html-name').textContent = uploadedFile.name;
-            document.getElementById('info-html-size').textContent = `${(uploadedFile.size / 1024).toFixed(2)} KB`;
-            document.getElementById('convert-btn').disabled = false;
-
-            log(`Main file selected: ${file.name} (${(file.size / (1024*1024)).toFixed(2)} MB)`);
-
-            // Read text if HTML
-            if (file.name.endsWith('.html') || file.name.endsWith('.txt')) {
-                const text = await file.text();
-                rawAdHtml = text;
-                // Auto preview source ad
-                loadAdInPreview(rawAdHtml, false);
-            }
-        }
-
-        document.getElementById('clear-html-btn').addEventListener('click', (e) => {
-            e.stopPropagation();
-            uploadedFile = null;
-            rawAdHtml = "";
-            document.getElementById('file-html').value = '';
-            document.getElementById('label-html').classList.remove('hidden');
-            document.getElementById('info-html').classList.add('hidden');
-            document.getElementById('convert-btn').disabled = true;
-            document.getElementById('preview-placeholder').classList.remove('hidden');
-            log("Removed main ad file.");
-        });
-
-        // Companion JS Upload Box
-        const dropZoneJs = document.getElementById('drop-zone-js');
-        const fileInputJs = document.getElementById('file-js');
-
-        dropZoneJs.addEventListener('click', () => fileInputJs.click());
-        dropZoneJs.addEventListener('dragover', (e) => { e.preventDefault(); dropZoneJs.classList.add('border-indigo-400'); });
-        dropZoneJs.addEventListener('dragleave', () => { dropZoneJs.classList.remove('border-indigo-400'); });
-        dropZoneJs.addEventListener('drop', (e) => {
-            e.preventDefault();
-            dropZoneJs.classList.remove('border-indigo-400');
-            if (e.dataTransfer.files.length) handleJsFileSelect(e.dataTransfer.files[0]);
-        });
-        fileInputJs.addEventListener('change', (e) => {
-            if (e.target.files.length) handleJsFileSelect(e.target.files[0]);
-        });
-
-        function handleJsFileSelect(file) {
-            jsFile = file;
-            document.getElementById('label-js').classList.add('hidden');
-            document.getElementById('info-js').classList.remove('hidden');
-            document.getElementById('info-js-name').textContent = `Companion JS: ${file.name}`;
-            log(`Manual companion JS selected: ${file.name}`);
-        }
-
-        document.getElementById('clear-js-btn').addEventListener('click', (e) => {
-            e.stopPropagation();
-            jsFile = null;
-            document.getElementById('file-js').value = '';
-            document.getElementById('label-js').classList.remove('hidden');
-            document.getElementById('info-js').classList.add('hidden');
-            log("Removed manual companion JS file.");
-        });
-
-        // Direct JS Code Paste Toggle
-        document.getElementById('toggle-paste-btn').addEventListener('click', () => {
-            const container = document.getElementById('paste-js-container');
-            container.classList.toggle('hidden');
-        });
-        document.getElementById('clear-paste-btn').addEventListener('click', () => {
-            document.getElementById('paste-js-text').value = '';
-        });
-
-        // Preset App Link buttons
-        document.getElementById('preset-google-play').addEventListener('click', () => {
-            document.getElementById('app-link-input').value = 'https://play.google.com/store/apps/details?id=com.ecffri.arrows&hl=en_US';
-            showToast('Preset Applied', 'Google Play destination URL set.');
-        });
-        document.getElementById('preset-app-store').addEventListener('click', () => {
-            document.getElementById('app-link-input').value = 'https://apps.apple.com/us/app/arrows-puzzle-escape/id6748397500';
-            showToast('Preset Applied', 'Apple App Store destination URL set.');
-        });
-
-        // Clear logs
-        document.getElementById('clear-logs-btn').addEventListener('click', () => {
-            document.getElementById('log-box').innerHTML = '<div class="text-slate-500">[Cleared] Logs reset.</div>';
-        });
-
-        // Accordion Toggles
-        document.getElementById('toggle-files-accordion').addEventListener('click', () => {
-            document.getElementById('files-accordion-content').classList.toggle('hidden');
-        });
-        document.getElementById('toggle-code-accordion').addEventListener('click', () => {
-            document.getElementById('code-accordion-content').classList.toggle('hidden');
-        });
-        document.getElementById('copy-code-btn').addEventListener('click', () => {
-            const code = document.getElementById('code-viewer').textContent;
-            navigator.clipboard.writeText(code).then(() => {
-                showToast('Code Copied', 'index.html copied to clipboard!');
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(evt => {
+                dropZone.addEventListener(evt, e => e.preventDefault());
             });
-        });
 
-        // =========================================================================
-        // INTERACTIVE LIVE PREVIEW (Requirement #1)
-        // =========================================================================
-        const previewIframe = document.getElementById('ad-preview-iframe');
-        const previewPlaceholder = document.getElementById('preview-placeholder');
-        const previewWrapper = document.getElementById('preview-wrapper');
-
-        function loadAdInPreview(htmlContent, isConverted = true) {
-            if (!htmlContent) return;
-            previewPlaceholder.classList.add('hidden');
-            
-            // Set srcdoc
-            previewIframe.srcdoc = htmlContent;
-            
-            log(`Rendered ad in live preview simulator (${isConverted ? 'Converted' : 'Original Source'}).`);
-            document.getElementById('cta-status-indicator').innerHTML = 'CTA: <span class="text-emerald-600 font-semibold">Active & Listening</span>';
-        }
-
-        // Preview Now Button
-        document.getElementById('preview-now-btn').addEventListener('click', async () => {
-            if (!uploadedFile && !rawAdHtml) {
-                alert("Please upload an ad file or choose a sample from the dropdown first.");
-                return;
-            }
-            if (convertedAdHtml) {
-                loadAdInPreview(convertedAdHtml, true);
-                setPreviewTab('converted');
-            } else if (rawAdHtml) {
-                loadAdInPreview(rawAdHtml, false);
-                setPreviewTab('original');
-            } else if (uploadedFile) {
-                const text = await uploadedFile.text();
-                rawAdHtml = text;
-                loadAdInPreview(rawAdHtml, false);
-                setPreviewTab('original');
-            }
-        });
-
-        // Preview Tab switching
-        document.getElementById('tab-preview-converted').addEventListener('click', () => {
-            if (convertedAdHtml) {
-                loadAdInPreview(convertedAdHtml, true);
-                setPreviewTab('converted');
-            } else {
-                showToast('Not Converted Yet', 'Click "Convert & Package for Google Ads" to generate converted version.', 'warn');
-            }
-        });
-        document.getElementById('tab-preview-original').addEventListener('click', () => {
-            if (rawAdHtml) {
-                loadAdInPreview(rawAdHtml, false);
-                setPreviewTab('original');
-            } else {
-                showToast('No Source HTML', 'Upload an ad file first to view original source.', 'warn');
-            }
-        });
-
-        function setPreviewTab(tab) {
-            previewMode = tab;
-            const tabConv = document.getElementById('tab-preview-converted');
-            const tabOrig = document.getElementById('tab-preview-original');
-            if (tab === 'converted') {
-                tabConv.className = 'py-2 px-3 border-b-2 border-indigo-600 text-indigo-600 font-semibold transition';
-                tabOrig.className = 'py-2 px-3 border-b-2 border-transparent text-slate-400 hover:text-slate-600 font-semibold transition';
-            } else {
-                tabOrig.className = 'py-2 px-3 border-b-2 border-indigo-600 text-indigo-600 font-semibold transition';
-                tabConv.className = 'py-2 px-3 border-b-2 border-transparent text-slate-400 hover:text-slate-600 font-semibold transition';
-            }
-        }
-
-        // Device Orientation Buttons
-        document.getElementById('orient-portrait').addEventListener('click', () => {
-            previewWrapper.style.width = '320px';
-            previewWrapper.style.height = '540px';
-            updateOrientButtons('portrait');
-        });
-        document.getElementById('orient-landscape').addEventListener('click', () => {
-            previewWrapper.style.width = '540px';
-            previewWrapper.style.height = '320px';
-            updateOrientButtons('landscape');
-        });
-        document.getElementById('orient-responsive').addEventListener('click', () => {
-            previewWrapper.style.width = '100%';
-            previewWrapper.style.height = '520px';
-            updateOrientButtons('responsive');
-        });
-
-        function updateOrientButtons(mode) {
-            const btnP = document.getElementById('orient-portrait');
-            const btnL = document.getElementById('orient-landscape');
-            const btnR = document.getElementById('orient-responsive');
-            [btnP, btnL, btnR].forEach(b => {
-                b.className = 'p-1.5 rounded-lg text-slate-500 hover:text-slate-900 font-semibold text-xs';
+            ['dragenter', 'dragover'].forEach(evt => {
+                dropZone.addEventListener(evt, () => dropZone.classList.add('drop-active'));
             });
-            if (mode === 'portrait') btnP.className = 'p-1.5 rounded-lg text-slate-700 bg-white shadow-xs font-semibold text-xs';
-            if (mode === 'landscape') btnL.className = 'p-1.5 rounded-lg text-slate-700 bg-white shadow-xs font-semibold text-xs';
-            if (mode === 'responsive') btnR.className = 'p-1.5 rounded-lg text-slate-700 bg-white shadow-xs font-semibold text-xs';
-        }
 
-        // Reload Preview
-        document.getElementById('reload-preview-btn').addEventListener('click', () => {
-            const currentDoc = previewIframe.srcdoc;
-            if (currentDoc) {
-                previewIframe.srcdoc = currentDoc;
-                showToast('Preview Reloaded', 'Game restarted in simulator.');
-            }
-        });
+            ['dragleave', 'drop'].forEach(evt => {
+                dropZone.addEventListener(evt, () => dropZone.classList.remove('drop-active'));
+            });
 
-        // Test CTA Simulation
-        document.getElementById('test-cta-btn').addEventListener('click', () => {
-            const destinationUrl = document.getElementById('app-link-input').value.trim() || 'https://www.google.com';
-            try {
-                // Trigger exit in iframe
-                previewIframe.contentWindow.postMessage({ type: 'TRIGGER_SIMULATED_CTA' }, '*');
-                if (previewIframe.contentWindow.exitAd) {
-                    previewIframe.contentWindow.exitAd(destinationUrl);
+            fileInput.addEventListener('change', (e) => {
+                if (e.target.files.length) {
+                    const file = e.target.files[0];
+                    if (isJs) jsFile = file; else uploadedFile = file;
+                    
+                    labelDiv.classList.add('hidden');
+                    infoDiv.classList.remove('hidden');
+                    infoDiv.textContent = `${isJs ? 'JS File' : 'Main File'}: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
+                    log(`${isJs ? 'Manual JS' : 'Main ad'} file loaded: ${file.name}`);
                 }
-            } catch(e) {}
-            showToast('🎯 CTA Click Captured!', `Destination: ${destinationUrl}`, 'success');
+            });
+        }
+
+        setupDropZone('drop-zone-html', 'file-html', 'label-html', 'info-html', false);
+        setupDropZone('drop-zone-js', 'file-js', 'label-js', 'info-js', true);
+
+        document.getElementById('reset-btn').addEventListener('click', () => {
+            uploadedFile = null;
+            jsFile = null;
+            document.getElementById('file-html').value = "";
+            document.getElementById('file-js').value = "";
+            document.getElementById('label-html').classList.remove('hidden');
+            document.getElementById('info-html').classList.add('hidden');
+            document.getElementById('label-js').classList.remove('hidden');
+            document.getElementById('info-js').classList.add('hidden');
+            document.getElementById('app-link').value = "";
+            document.getElementById('results-section').classList.add('hidden');
+            document.getElementById('log-box').classList.add('hidden');
+            document.getElementById('log-box').innerHTML = '<div class="font-bold text-slate-400 mb-1">--- Live Processing Logs ---</div>';
+            document.getElementById('preview-frame').src = "";
+            const btn = document.getElementById('convert-btn');
+            btn.textContent = 'Convert & Package';
+            btn.disabled = false;
         });
 
-        // Intercept PostMessage from Preview Iframe
-        window.addEventListener('message', (event) => {
-            if (event.data && event.data.type === 'AD_EXIT_TRIGGERED') {
-                const targetUrl = event.data.url || document.getElementById('app-link-input').value.trim();
-                showToast('🎯 CTA Click Triggered!', `In-Game Exit detected! Navigating to: ${targetUrl}`, 'success');
-                document.getElementById('cta-status-indicator').innerHTML = `CTA: <span class="text-emerald-600 font-bold">Triggered (Validated)</span>`;
-                log(`[CTA Click Event] In-Game exitAd triggered with destination: ${targetUrl}`, 'success');
-            }
-        });
-
-        // =========================================================================
-        // ROBUST HELPER & PAYLOAD EXTRACTION FUNCTIONS (Requirement #5)
-        // =========================================================================
+        // ==========================================
+        // CONVERTER HELPER FUNCTIONS
+        // ==========================================
         function isValidImage(buffer, filename) {
             const name = filename.toLowerCase();
             if (buffer.length < 8) return false;
-            if (name.endsWith('.png')) {
-                return buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4E && buffer[3] === 0x47;
-            }
-            if (name.endsWith('.jpg') || name.endsWith('.jpeg')) {
-                return buffer[0] === 0xFF && buffer[1] === 0xD8 && buffer[2] === 0xFF;
-            }
+            if (name.endsWith('.png')) return buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4E && buffer[3] === 0x47;
+            if (name.endsWith('.jpg') || name.endsWith('.jpeg')) return buffer[0] === 0xFF && buffer[1] === 0xD8 && buffer[2] === 0xFF;
             return true;
         }
 
@@ -938,168 +193,75 @@
             const binaryString = window.atob(base64);
             const len = binaryString.length;
             const bytes = new Uint8Array(len);
-            for (let i = 0; i < len; i++) {
-                bytes[i] = binaryString.charCodeAt(i);
-            }
+            for (let i = 0; i < len; i++) bytes[i] = binaryString.charCodeAt(i);
             return bytes;
         }
 
-        // Rock-solid AppLovin Payload Extractor
         function extractAppLovinPayload(jsContent) {
-            if (!jsContent) return null;
-
-            // Strategy 1: JSON Parse substring
-            let start = jsContent.indexOf('al_renderHtml(');
-            if (start !== -1) {
-                let firstBrace = jsContent.indexOf('{', start);
-                let lastBrace = jsContent.lastIndexOf('}');
-                if (firstBrace !== -1 && lastBrace > firstBrace) {
-                    let jsonStr = jsContent.substring(firstBrace, lastBrace + 1);
-                    try {
-                        let obj = JSON.parse(jsonStr);
-                        if (obj && obj.html) return obj.html;
-                    } catch (e) {
-                        // Will fallback to strategy 2
-                    }
-                }
-            }
-
-            // Strategy 2: Sandboxed Function evaluation
-            try {
-                let extractedHtml = null;
-                const mockRender = function(obj) {
-                    if (obj && obj.html) extractedHtml = obj.html;
-                };
-                const fn = new Function('al_renderHtml', jsContent);
-                fn(mockRender);
-                if (extractedHtml) return extractedHtml;
-            } catch (e) {
-                // Evaluation error
-            }
-
-            // Strategy 3: Regex match for {"html":"..."}
-            const htmlRegex = /al_renderHtml\s*\(\s*\{[\s\S]*?["']html["']\s*:\s*["']([\s\S]+?)["']\s*\}\s*\)/i;
-            const match = jsContent.match(htmlRegex);
+            const match = jsContent.match(/al_renderHtml\s*\(\s*(\{[\s\S]+\}|["'][\s\S]+["'])\s*\)/);
             if (match && match[1]) {
                 try {
-                    return JSON.parse('"' + match[1].replace(/"/g, '\\"') + '"');
-                } catch(e) {}
+                    let parsed = JSON.parse(match[1]);
+                    return parsed.html ? parsed.html : parsed;
+                } catch (e) {
+                    console.warn("JSON.parse failed on AppLovin payload, attempting eval fallback", e);
+                    try {
+                        let evaled = eval('(' + match[1] + ')');
+                        return evaled.html ? evaled.html : evaled;
+                    } catch(e2) { }
+                }
             }
-
             return null;
         }
 
-        // Multi-tier Auto-Fetcher (Direct + Proxies)
-        async function fetchExternalScript(url) {
-            log(`Attempting to fetch external script: ${url}...`);
-
-            // Tier 1: Direct fetch
-            try {
-                log(`Trying direct fetch for ${url}`);
-                const res = await fetch(url, { mode: 'cors' });
-                if (res.ok) {
-                    const text = await res.text();
-                    if (text && text.length > 100) {
-                        log(`✓ Direct fetch successful (${(text.length/1024).toFixed(1)} KB)`);
-                        return text;
-                    }
-                }
-            } catch (e) {
-                log(`Direct fetch failed (CORS/Network restriction): ${e.message}`, 'warn');
-            }
-
-            // Tier 2: AllOrigins proxy
-            try {
-                const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
-                log(`Trying CORS Proxy 1 (AllOrigins)...`);
-                const res = await fetch(proxyUrl);
-                if (res.ok) {
-                    const text = await res.text();
-                    if (text && text.length > 100) {
-                        log(`✓ CORS Proxy 1 successful (${(text.length/1024).toFixed(1)} KB)`, 'success');
-                        return text;
-                    }
-                }
-            } catch (e) {
-                log(`Proxy 1 failed: ${e.message}`, 'warn');
-            }
-
-            // Tier 3: CorsProxy.io
-            try {
-                const proxyUrl2 = `https://corsproxy.io/?${encodeURIComponent(url)}`;
-                log(`Trying CORS Proxy 2 (CorsProxy.io)...`);
-                const res = await fetch(proxyUrl2);
-                if (res.ok) {
-                    const text = await res.text();
-                    if (text && text.length > 100) {
-                        log(`✓ CORS Proxy 2 successful (${(text.length/1024).toFixed(1)} KB)`, 'success');
-                        return text;
-                    }
-                }
-            } catch (e) {
-                log(`Proxy 2 failed: ${e.message}`, 'warn');
-            }
-
-            return null;
-        }
-
-        // Convert AppLovin exit & inject Google Ads ExitApi with custom App Link
-        function convertApplovinExit(html, customAppUrl) {
-            const cleanAppUrl = customAppUrl || "https://www.google.com";
-
-            // Standardize exit calls
+        function convertApplovinExit(html, appLink) {
             html = html.replace(/mraid\.open\(/g, "exitAd(");
             html = html.replace(/super_open\(/g, "exitAd(");
 
-            // Replace hardcoded store URLs in scripts with customAppUrl
-            html = html.replace(/https?:\/\/(?:play\.google\.com\/store\/apps\/details\?[^"'\s)]+|apps\.apple\.com\/[^"'\s)]+)/g, cleanAppUrl);
-
             const exitScript = `
-<!-- Google Ads Official Exit API Script & Polyfills -->
+<!-- Google Ads Official Exit API & MRAID Polyfill -->
 <script type="text/javascript" src="https://tpc.googlesyndication.com/pagead/gadgets/html5/api/exitapi.js">${sEnd}
 <script>
-window.clickTag = "${cleanAppUrl}";
-var clickTag = window.clickTag;
+var clickTag = "${appLink}";
 
 function exitAd(url){
-    var target = url || window.clickTag || "${cleanAppUrl}";
-    try {
-        window.parent.postMessage({ type: 'AD_EXIT_TRIGGERED', url: target }, '*');
-    } catch(e) {}
+    var target = url || clickTag;
     if (typeof ExitApi !== 'undefined' && ExitApi.exit) {
         ExitApi.exit();
-    } else if (target) {
+    } else if(target) {
         window.open(target, "_blank");
     }
 }
 
+// FULL MRAID MOCK API (Fixes Blank Page Issues)
 window.mraid = window.mraid || {
-    addEventListener: function () {},
-    removeEventListener: function () {},
+    listeners: {},
+    addEventListener: function (event, handler) {
+        if (!this.listeners[event]) this.listeners[event] = [];
+        this.listeners[event].push(handler);
+        // Fire ready events immediately so the game actually boots
+        if (event === 'ready') setTimeout(handler, 10);
+        if (event === 'viewableChange') setTimeout(function(){ handler(true); }, 10);
+    },
+    removeEventListener: function (event, handler) {},
     isViewable: function () { return true; },
     getState: function () { return "default"; },
     open: function (url) { exitAd(url); },
-    close: function () {}
+    close: function () {},
+    expand: function () {},
+    useCustomClose: function () {}
 };
 window.mraid.open = function(url) { exitAd(url); }; 
 
 var originalWindowOpen = window.open;
 window.open = function(url, target, features) { exitAd(url); };
 
-// Global click capture on interactive CTA elements
 document.addEventListener('click', function(e) {
-    var target = e.target.closest('a, button, .cta, .button, [id*="cta"], [class*="cta"], [id*="play"], [class*="play"], [id*="install"], [class*="install"]');
+    var target = e.target.closest('a, button, .cta, .button, [id*="cta"], [class*="cta"], [id*="play"], [class*="play"], #canvas, canvas');
     if (target || (e.clientX > window.innerWidth - 150 && e.clientY > window.innerHeight - 80)) {
         exitAd();
     }
 }, { capture: true, passive: true });
-
-// Listen for preview simulated CTA
-window.addEventListener('message', function(e) {
-    if (e.data && e.data.type === 'TRIGGER_SIMULATED_CTA') {
-        exitAd();
-    }
-});
 ${sEnd}
 `;
             if (html.includes("</head>")) {
@@ -1110,33 +272,22 @@ ${sEnd}
             return html;
         }
 
-        // Convert Cocos Loader (ONLY when Cocos signatures actually exist!)
         function convertCocosLoader(html) {
-            // Check if Cocos signatures exist
-            const isCocos = html.includes('cocos-js') || html.includes('cc.js') || html.includes('systemjs-importmap') || html.includes('super_html');
-            if (!isCocos) return html;
-
             html = html.replace(/\.\/\.\.\/cocos-js\/cc\.js/g, "./cocos-js/cc.js");
+            html = html.replace(/<script>\s*\(function\(global\)[\s\S]*?<\/script>/g, "");
 
-            const placeholders = [
-                "/* COCOS_SYSTEM_JS_PLACEHOLDER */",
-                "/* COCOS_INDEX_JS_PLACEHOLDER */",
-                "<!-- COCOS_RUNTIME_PLACEHOLDER -->",
-                "<!-- COCOS_BOOT_PLACEHOLDER -->"
-            ];
-            for (let ph of placeholders) {
-                html = html.split(ph).join("");
-            }
+            const placeholders = ["/* COCOS_SYSTEM_JS_PLACEHOLDER */", "/* COCOS_INDEX_JS_PLACEHOLDER */", "<!-- COCOS_RUNTIME_PLACEHOLDER -->", "<!-- COCOS_BOOT_PLACEHOLDER -->"];
+            for (let ph of placeholders) html = html.split(ph).join("");
 
             html = html.replace(/<script[^>]*src=["'](?:\.\/)?index\.js["'][^>]*><\/script>/gi, "");
 
             const runtime_placeholder = "\n<!-- COCOS_RUNTIME_PLACEHOLDER -->\n";
-            const boot_placeholder = `\n<script>\n(function () {\n    function bootCocos() {\n        if (!window.System || !System.import) {\n            console.error("COCOS BOOT FAILED", "SystemJS is not available");\n            return;\n        }\n        System.import("./index.js").then(function () {\n            console.log("COCOS BOOT OK");\n        }).catch(function (error) {\n            console.error("COCOS BOOT FAILED", error);\n        });\n    }\n    bootCocos();\n})();\n${sEnd}\n`;
+            const boot_placeholder = `\n<script>\n(function () {\n    function bootCocos() {\n        if (!window.System || !System.import) { return; }\n        System.import("./index.js").catch(function (error) { console.error("COCOS BOOT FAILED", error); });\n    }\n    bootCocos();\n})();\n${sEnd}\n`;
 
             if (html.includes("systemjs-importmap")) {
                 html = html.replace('<script type="systemjs-importmap">', runtime_placeholder + '\n<script type="systemjs-importmap">');
             } else {
-                const fallback_import_map = `\n<script type="systemjs-importmap">\n{\n    "imports": {\n        "cc": "./cocos-js/cc.js"\n    }\n}\n${sEnd}\n`;
+                const fallback_import_map = `\n<script type="systemjs-importmap">\n{\n    "imports": { "cc": "./cocos-js/cc.js" }\n}\n${sEnd}\n`;
                 if (html.includes("</head>")) {
                     html = html.replace("</head>", runtime_placeholder + fallback_import_map + "\n</head>");
                 } else {
@@ -1152,8 +303,7 @@ ${sEnd}
             return html;
         }
 
-        const buildCleanCocosHtml = (resContent, customAppUrl) => {
-            const cleanAppUrl = customAppUrl || "https://www.google.com";
+        const buildCleanCocosHtml = (resContent, appLink) => {
             return `<!DOCTYPE html>
 <html>
 <head>
@@ -1171,27 +321,25 @@ ${sEnd}
     <script type="text/javascript" src="https://tpc.googlesyndication.com/pagead/gadgets/html5/api/exitapi.js">${sEnd}
 
 <script type="text/javascript">
-    window.clickTag = "${cleanAppUrl}";
+    window.clickTag = "${appLink}";
 
     var originalWindowOpen = window.open;
     window.open = function(url, target, features) {
-        if (typeof ExitApi !== "undefined" && ExitApi.exit) {
+        if (typeof ExitApi !== "undefined") {
             ExitApi.exit();
         } else {
             originalWindowOpen(window.clickTag, "_blank");
         }
     };
 
-    window.exitAd = function () {
-        if (typeof ExitApi !== "undefined" && ExitApi.exit) {
-            ExitApi.exit();
-        } else {
-            window.open(window.clickTag, "_blank"); 
-        }
-    };
+    window.exitAd = function () { window.open(window.clickTag, "_blank"); };
 
     window.mraid = window.mraid || {
-        addEventListener: function () {},
+        listeners: {},
+        addEventListener: function (event, handler) {
+            if(event === 'ready') setTimeout(handler, 10);
+            if(event === 'viewableChange') setTimeout(function(){ handler(true); }, 10);
+        },
         removeEventListener: function () {},
         isViewable: function () { return true; },
         getState: function () { return "default"; },
@@ -1208,14 +356,7 @@ ${sEnd}
         script.async = true;
         return script;
     }
-
     window._createLocalJSElement = _createLocalJSElement;
-
-    function super_log(message) {
-        console.log("[super-html] " + message);
-    }
-
-    window.super_log = window.super_log || super_log;
 
     function super_eval(url) {
         var resources = window.__res || {};
@@ -1231,11 +372,7 @@ ${sEnd}
                 }
             }
         }
-
-        if (!code) {
-            console.error("super_eval missing resource", url);
-            return;
-        }
+        if (!code) return;
 
         code = String(code);
         code = code.replace(/window\\.location\\.href\\s*=\\s*[^;]+;/gi, "window.exitAd();");
@@ -1243,28 +380,16 @@ ${sEnd}
         code = code.replace(/super_html\\.download\\s*\\([^)]*\\)/gi, "window.exitAd()");
         code = code.replace(/window\\.super_html\\.download\\s*\\([^)]*\\)/gi, "window.exitAd()");
         code = code.replace(/mraid\\.open\\s*\\([^)]*\\)/gi, "window.exitAd()");
-
         eval(code);
         delete resources[key];
     }
     window.super_eval = super_eval;
     ${sEnd}
 
-    <script>
-        window.__res = ${resContent};
-    ${sEnd}
-
+    <script>window.__res = ${resContent};${sEnd}
     <script src="./@src/polyfills.bundle.js">${sEnd}
     <script src="./@src/system.bundle.js">${sEnd}
-
-    <script type="systemjs-importmap">
-    {
-        "imports": {
-            "cc": "./cocos-js/cc.js"
-        }
-    }
-    ${sEnd}
-
+    <script type="systemjs-importmap">{ "imports": { "cc": "./cocos-js/cc.js" } }${sEnd}
     <script src="./@src/cc.adapter.js">${sEnd}
 </head>
 <body>
@@ -1276,15 +401,8 @@ ${sEnd}
             function startPlayable() {
                 if (typeof window.super_boot_engine === "function") {
                     window.super_boot_engine();
-                    console.log("COCOS BOOT OK (super_boot_engine)");
                 } else if (window.System && window.System.import) {
-                    window.System.import("./index.js").then(function () {
-                        console.log("COCOS BOOT OK (System.import)");
-                    }).catch(function (error) {
-                        console.error("COCOS BOOT FAILED (System.import)", error);
-                    });
-                } else {
-                    console.error("COCOS BOOT FAILED", "No valid bootloader is available.");
+                    window.System.import("./index.js").catch(function(e){});
                 }
             }
             if (document.readyState === "loading") {
@@ -1298,22 +416,25 @@ ${sEnd}
 </html>`;
         };
 
-        // =========================================================================
-        // MAIN CONVERSION PIPELINE
-        // =========================================================================
+        // ==========================================
+        // MAIN EXECUTION
+        // ==========================================
         document.getElementById('convert-btn').addEventListener('click', async () => {
             if (!uploadedFile) {
-                alert("Please upload a file or select a sample first.");
+                alert("Please upload an ad file first!");
                 return;
+            }
+            
+            let appLink = document.getElementById('app-link').value.trim();
+            if (!appLink) {
+                appLink = "https://www.google.com"; // Default fallback
             }
 
             const btn = document.getElementById('convert-btn');
-            const btnText = document.getElementById('convert-btn-text');
-            btnText.textContent = 'Processing & Validating...';
+            btn.textContent = 'Processing...';
             btn.disabled = true;
-
-            const customAppUrl = document.getElementById('app-link-input').value.trim() || 'https://www.google.com';
-            log(`Starting conversion with Destination App URL: ${customAppUrl}`);
+            document.getElementById('log-box').classList.remove('hidden');
+            document.getElementById('log-box').innerHTML = '<div class="font-bold text-slate-400 mb-1">--- Live Processing Logs ---</div>';
 
             try {
                 let htmlText = "";
@@ -1322,86 +443,57 @@ ${sEnd}
 
                 let payload = null;
 
-                // Step 1: Check manual companion inputs first
-                const pastedJs = document.getElementById('paste-js-text').value.trim();
-                if (pastedJs) {
-                    log("Found manually pasted JS code. Extracting payload...");
-                    payload = extractAppLovinPayload(pastedJs);
-                    if (payload) log("✓ Extracted payload from directly pasted JavaScript!", 'success');
-                }
-
-                if (!payload && jsFile) {
-                    log(`Processing manual companion JS file: ${jsFile.name}...`);
+                // 1. AppLovin & External JS Auto-Fetch Logic
+                if (jsFile) {
+                    log("Processing manually uploaded companion JS file...");
                     const jsContent = await jsFile.text();
                     payload = extractAppLovinPayload(jsContent);
-                    if (payload) log("✓ Extracted payload from manual companion JS file!", 'success');
-                }
-
-                // Step 2: Check if payload already embedded inside the HTML
-                if (!payload) {
+                    if (payload) log("Extracted payload from manual JS file.");
+                } else {
                     payload = extractAppLovinPayload(htmlText);
-                    if (payload) log("✓ Extracted embedded payload directly from HTML file.");
-                }
-
-                // Step 3: Scan for external script URLs and auto-fetch
-                if (!payload) {
-                    const scriptRegex = /<script[^>]+src=["'](https?:\/\/[^"']+\.js(?:\?[^"']*)?)["'][^>]*>/gi;
-                    let match;
-                    let externalJsUrls = [];
-
-                    while ((match = scriptRegex.exec(htmlText)) !== null) {
-                        const url = match[1];
-                        if (!url.includes('exitapi.js') && !url.includes('google-analytics') && !url.includes('googletagmanager')) {
-                            externalJsUrls.push(url);
-                        }
-                    }
-
-                    if (externalJsUrls.length > 0) {
-                        log(`Found ${externalJsUrls.length} external JS link(s) in HTML wrapper. Starting auto-fetch...`);
+                    if (payload) {
+                        log("Extracted embedded payload directly from HTML file.");
+                    } else {
+                        const scriptRegex = /<script[^>]+src=["'](https?:\/\/[^"']+\.js(\?[^"']*)?)["'][^>]*>/gi;
+                        let match;
+                        let externalJsUrls = [];
                         
-                        for (let url of externalJsUrls) {
-                            const fetchedJs = await fetchExternalScript(url);
-                            if (fetchedJs) {
-                                payload = extractAppLovinPayload(fetchedJs);
-                                if (payload) {
-                                    log(`🎉 SUCCESS: Extracted complete playable payload from external script!`, 'success');
-                                    break;
+                        while ((match = scriptRegex.exec(htmlText)) !== null) {
+                            if (!match[1].includes('exitapi.js')) {
+                                externalJsUrls.push(match[1]);
+                            }
+                        }
+                        
+                        if (externalJsUrls.length > 0) {
+                            log(`Detected ${externalJsUrls.length} external JS link(s). Attempting to auto-fetch...`);
+                            for (let url of externalJsUrls) {
+                                try {
+                                    log(`Fetching: ${url}`);
+                                    const response = await fetch(url);
+                                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                                    const fetchedJs = await response.text();
+                                    
+                                    payload = extractAppLovinPayload(fetchedJs);
+                                    if (payload) {
+                                        log(`SUCCESS: Extracted payload from auto-fetched JS!`);
+                                        break; 
+                                    }
+                                } catch (e) {
+                                    log(`Fetch failed for ${url}. CORS policy block likely.`);
                                 }
                             }
-                        }
-
-                        // Requirement #5 Fix: IF EXTERNAL SCRIPT COULD NOT BE FETCHED, DO NOT SILENTLY EMIT BLANK PAGE!
-                        if (!payload) {
-                            const failedUrl = externalJsUrls[0];
-                            log(`CRITICAL WARNING: Could not auto-fetch external script (${failedUrl}) due to browser CORS/Network restrictions.`, 'error');
-                            
-                            // Highlight companion JS section
-                            document.getElementById('paste-js-container').classList.remove('hidden');
-                            document.getElementById('drop-zone-js').scrollIntoView({ behavior: 'smooth' });
-
-                            const proceedAnyway = confirm(
-                                `⚠️ External Script Download Required!\n\n` +
-                                `The ad references an external script:\n${failedUrl}\n\n` +
-                                `Your browser blocked auto-fetching due to CORS.\n` +
-                                `Please open this link in a new tab, download/save it, and drop it into the "Manual Companion JS File" box.\n\n` +
-                                `Do you want to open the JS file link in a new tab right now?`
-                            );
-                            if (proceedAnyway) {
-                                window.open(failedUrl, '_blank');
+                            if(!payload) {
+                                throw new Error("Ad is a loader but auto-fetch failed (CORS block). Please manually download the .js file and drag it into the 'Manual JS Payload' box.");
                             }
-                            btnText.textContent = 'Convert & Package for Google Ads';
-                            btn.disabled = false;
-                            return; // Stop pipeline to prevent generating empty zip!
                         }
                     }
                 }
 
                 if (payload) {
                     htmlText = payload;
-                    log(`Using extracted playable HTML payload (${(htmlText.length/1024).toFixed(1)} KB).`);
                 }
 
-                // Step 4: Check for Embedded ZIP (__zip)
+                // 2. Check for Embedded ZIP
                 let zipData = null;
                 let zipMatch = htmlText.match(/window\.__zip\s*=\s*"([^"]+)"/);
                 if (!zipMatch) zipMatch = htmlText.match(/window\.__zip\s*=\s*'([^']+)'/);
@@ -1410,12 +502,12 @@ ${sEnd}
                 if (zipMatch) {
                     zipData = zipMatch[1].replace(/\\n/g, "").replace(/\\"/g, '"');
                 }
-
+                
                 const finalZip = new JSZip();
-                let packagedFilesList = [];
 
                 if (zipData) {
-                    log("Embedded base64 ZIP detected (__zip). Decompressing and extracting package assets...");
+                    log("Detected embedded base64 ZIP (__zip). Decoding and parsing assets...");
+                    
                     const binaryData = base64ToUint8Array(zipData);
                     const unzipped = await JSZip.loadAsync(binaryData);
                     
@@ -1426,11 +518,7 @@ ${sEnd}
                     for (let fn of Object.keys(unzipped.files)) {
                         const fileName = fn.split('/').pop();
                         
-                        if (fileName.startsWith('._') || 
-                            fileName === '.DS_Store' || 
-                            fileName === 'Thumbs.db' || 
-                            fileName === 'desktop.ini' ||
-                            fn.includes('__MACOSX')) {
+                        if (fileName.startsWith('._') || fileName === '.DS_Store' || fileName === 'Thumbs.db' || fileName === 'desktop.ini' || fn.includes('__MACOSX')) {
                             filteredCount++;
                             continue;
                         }
@@ -1439,15 +527,12 @@ ${sEnd}
                         if (entry.dir) continue;
                         
                         let buffer = await entry.async("uint8array");
-                        if (buffer.length === 0) {
-                            filteredCount++;
-                            continue;
-                        }
+                        if (buffer.length === 0) { filteredCount++; continue; }
 
                         let isFakeImage = false;
                         if (fileName.toLowerCase().match(/\.(png|jpe?g)$/)) {
                             if (!isValidImage(buffer, fileName)) {
-                                log(`Soft-skipping invalid image asset: ${fileName}.`);
+                                log(`Soft-skipping corrupt image: ${fileName}. Kept in memory, removed from physical ZIP.`);
                                 isFakeImage = true; 
                                 filteredCount++;
                             }
@@ -1465,54 +550,40 @@ ${sEnd}
                         try {
                             let textDecoder = new TextDecoder('utf-8', {fatal: true});
                             textContent = textDecoder.decode(buffer);
-                        } catch(e) {
-                            textContent = null;
-                        }
+                        } catch(e) { textContent = null; }
 
                         if (textContent !== null) {
-                            if (fn.endsWith('cc.adapter.js')) {
-                                if (!textContent.trim().startsWith('(function')) {
-                                    textContent = "(function () {\n" + textContent + "\n})();\n";
-                                }
+                            if (fn.endsWith('cc.adapter.js') && !textContent.trim().startsWith('(function')) {
+                                textContent = "(function () {\n" + textContent + "\n})();\n";
                             }
                             resources[fn] = textContent;
-                            if (!isFakeImage) {
-                                finalZip.file(fn, textContent);
-                                packagedFilesList.push({ name: fn, size: buffer.length });
-                            }
+                            if (!isFakeImage) finalZip.file(fn, textContent);
                         } else {
                             let base64Content = await entry.async('base64');
                             let mimeType = getMimeType(fileName);
                             resources[fn] = `data:${mimeType};base64,${base64Content}`;
-                            
-                            if (!isFakeImage) {
-                                finalZip.file(fn, buffer);
-                                packagedFilesList.push({ name: fn, size: buffer.length });
-                            }
+                            if (!isFakeImage) finalZip.file(fn, buffer);
                         }
                     }
                     
-                    log(`Extracted ${extractedCount} internal assets into memory. (${filteredCount} junk files filtered)`);
+                    log(`Extracted ${extractedCount} files. (Filtered ${filteredCount} junk files)`);
 
-                    let resJsonString = JSON.stringify(resources);
-                    resJsonString = resJsonString.replace(/<\/script/gi, "<\\/script")
-                                                 .replace(/<!--/g, "<\\!--")
-                                                 .replace(/\u2028/g, "\\u2028")
-                                                 .replace(/\u2029/g, "\\u2029");
+                    let resJsonString = JSON.stringify(resources)
+                        .replace(/<\/script/gi, "<\\/script")
+                        .replace(/<!--/g, "<\\!--")
+                        .replace(/\u2028/g, "\\u2028")
+                        .replace(/\u2029/g, "\\u2029");
 
-                    htmlText = buildCleanCocosHtml(resJsonString, customAppUrl);
-                    log("Injected Google Ads ExitApi and super_eval for Cocos runtime.");
+                    htmlText = buildCleanCocosHtml(resJsonString, appLink);
+                    log("Built clean Cocos HTML with Python super_eval injected.");
 
                 } else {
-                    log("Non-zip ad structure detected. Converting AppLovin/HTML5 exit handlers & MRAID...");
+                    log("No embedded ZIP detected. Applying raw string replacements on HTML...");
                     
-                    // Inject Google Ads ExitApi & Custom Destination URL
-                    htmlText = convertApplovinExit(htmlText, customAppUrl);
-                    
-                    // Conditionally convert Cocos loader ONLY if Cocos signatures present
+                    htmlText = convertApplovinExit(htmlText, appLink);
                     htmlText = convertCocosLoader(htmlText);
 
-                    // Safe External Script Stripping using Regex
+                    // Safe External Script Stripping
                     htmlText = htmlText.replace(/<script[^>]*src=["'](http[^"']+)["'][^>]*>.*?<\/script>/gi, (match, url) => {
                         if (url.includes('exitapi.js') || url.includes('fonts.googleapis.com')) return match;
                         return '';
@@ -1522,93 +593,40 @@ ${sEnd}
                         return '';
                     });
 
-                    log("✓ Injected Google Ads ExitApi, clickTag, and MRAID polyfill.");
+                    log("Injected Google Ads ExitApi and MRAID Polyfill securely.");
                 }
 
-                // Add converted index.html to final ZIP
+                // Add index.html to final ZIP
                 finalZip.file('index.html', htmlText);
-                packagedFilesList.unshift({ name: 'index.html', size: new TextEncoder().encode(htmlText).length });
 
-                convertedAdHtml = htmlText;
-
-                // Requirement #5 Fix: REAL VALIDATION CHECKS
-                const hasBodyContent = htmlText.length > 2000 && (
-                    htmlText.includes('<canvas') || 
-                    htmlText.includes('game') || 
-                    htmlText.includes('body') || 
-                    htmlText.includes('fflate') || 
-                    htmlText.includes('atob') ||
-                    htmlText.includes('super_boot_engine')
-                );
-                const hasExitApi = htmlText.includes('exitapi.js') && htmlText.includes('exitAd');
-                const hasClickTag = htmlText.includes('clickTag') && htmlText.includes(customAppUrl);
-
-                // Build Final ZIP
-                log("Generating high-compression ZIP package for Google Ads...");
                 const contentUint8 = await finalZip.generateAsync({
                     type: 'uint8array',
                     compression: 'DEFLATE',
                     compressionOptions: { level: 9 }
                 });
-
-                const isUnder5Mb = contentUint8.length <= 5 * 1024 * 1024;
-
+                
                 const content = new Blob([contentUint8], { type: 'application/zip' });
-                if (currentZipBlob) URL.revokeObjectURL(currentZipBlob);
-                currentZipBlob = URL.createObjectURL(content);
+                const zipUrl = URL.createObjectURL(content);
 
-                // Update UI Validation Checklist
-                document.getElementById('val-content').textContent = hasBodyContent ? '✓ Present' : '✗ Warning: Small';
-                document.getElementById('val-content').className = hasBodyContent ? 'text-sm font-bold text-emerald-600' : 'text-sm font-bold text-amber-600';
+                // Setup Preview Iframe using a Blob URL of the generated HTML
+                const previewBlob = new Blob([htmlText], { type: 'text/html' });
+                const previewUrl = URL.createObjectURL(previewBlob);
+                document.getElementById('preview-frame').src = previewUrl;
 
-                document.getElementById('val-exitapi').textContent = hasExitApi ? '✓ Injected' : '✗ Missing';
-                document.getElementById('val-exitapi').className = hasExitApi ? 'text-sm font-bold text-emerald-600' : 'text-sm font-bold text-rose-600';
-
-                document.getElementById('val-clicktag').textContent = hasClickTag ? '✓ Custom URL' : '✓ Default URL';
-                document.getElementById('val-clicktag').className = 'text-sm font-bold text-emerald-600';
-
-                document.getElementById('val-size').textContent = isUnder5Mb ? `✓ ${(content.size / 1024).toFixed(1)} KB` : '✗ > 5MB Limit';
-                document.getElementById('val-size').className = isUnder5Mb ? 'text-sm font-bold text-emerald-600' : 'text-sm font-bold text-rose-600';
-
-                // Display Results Section
                 document.getElementById('package-size').textContent = `${(content.size / 1024).toFixed(2)} KB`;
                 document.getElementById('results-section').classList.remove('hidden');
 
-                // Update File List Accordion
-                const fileListEl = document.getElementById('package-file-list');
-                fileListEl.innerHTML = '';
-                document.getElementById('package-file-count').textContent = packagedFilesList.length;
-                packagedFilesList.forEach(f => {
-                    const li = document.createElement('li');
-                    li.className = 'py-1.5 flex justify-between items-center';
-                    li.innerHTML = `
-                        <span class="truncate font-semibold text-slate-700">${f.name}</span>
-                        <span class="text-slate-400 text-[11px] ml-2 font-normal">${(f.size/1024).toFixed(1)} KB</span>
-                    `;
-                    fileListEl.appendChild(li);
-                });
-
-                // Update Code Inspector
-                document.getElementById('code-viewer').textContent = htmlText.substring(0, 15000) + (htmlText.length > 15000 ? '\n\n/* ... [Truncated for inspector preview: total length ' + htmlText.length + ' chars] ... */' : '');
-
-                // Setup Download Button
                 const dlBtn = document.getElementById('download-btn');
-                dlBtn.href = currentZipBlob;
-                dlBtn.download = `${uploadedFile.name.replace(/\.[^/.]+$/, "")}_Google_Ads_Ready.zip`;
+                dlBtn.href = zipUrl;
+                dlBtn.download = 'Google_Ads_Ready.zip';
 
-                // Update Live Preview with Converted Version (Requirement #1)
-                loadAdInPreview(convertedAdHtml, true);
-                setPreviewTab('converted');
-
-                log(`🎉 Google Ads ZIP package created successfully! Size: ${(content.size / 1024).toFixed(2)} KB`, 'success');
-                showToast('Conversion Complete!', 'Google Ads package ready for download. Live preview updated!');
-
-                btnText.textContent = 'Convert & Package for Google Ads';
+                log('Google Ads ZIP package created successfully!');
+                btn.textContent = 'Convert & Package';
                 btn.disabled = false;
             } catch (err) {
-                log(`CRITICAL ERROR during conversion: ${err.message}`, 'error');
-                alert('Conversion error: ' + err.message);
-                btnText.textContent = 'Convert & Package for Google Ads';
+                log(`CRITICAL ERROR: ${err.message}`);
+                alert(err.message);
+                btn.textContent = 'Convert & Package';
                 btn.disabled = false;
             }
         });

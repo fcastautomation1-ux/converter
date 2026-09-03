@@ -12,7 +12,8 @@
     </style>
 </head>
 <body class="bg-slate-50 min-h-screen py-10 px-4">
-    <div class="max-w-4xl mx-auto bg-white rounded-2xl shadow-xl overflow-hidden p-8 flex flex-col md:flex-row gap-8">
+    <!-- Changed max-w-4xl to max-w-6xl to fix preview cutoff -->
+    <div class="max-w-6xl mx-auto bg-white rounded-2xl shadow-xl overflow-hidden p-8 flex flex-col md:flex-row gap-8">
         
         <!-- LEFT COLUMN: Controls -->
         <div class="flex-1">
@@ -121,6 +122,19 @@
 
             ['dragleave', 'drop'].forEach(evt => {
                 dropZone.addEventListener(evt, () => dropZone.classList.remove('drop-active'));
+            });
+
+            // Added drop listener to grab files from drag and drop
+            dropZone.addEventListener('drop', (e) => {
+                if (e.dataTransfer.files.length) {
+                    const file = e.dataTransfer.files[0];
+                    if (isJs) jsFile = file; else uploadedFile = file;
+                    
+                    labelDiv.classList.add('hidden');
+                    infoDiv.classList.remove('hidden');
+                    infoDiv.textContent = `${isJs ? 'JS File' : 'Main File'}: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
+                    log(`${isJs ? 'Manual JS' : 'Main ad'} file loaded: ${file.name}`);
+                }
             });
 
             fileInput.addEventListener('change', (e) => {
@@ -266,8 +280,9 @@ window.mraid.open = function(url) { exitAd(url); };
 var originalWindowOpen = window.open;
 window.open = function(url, target, features) { exitAd(url); };
 
+// Removed '#canvas, canvas' from closest() to prevent intercepting gameplay clicks
 document.addEventListener('click', function(e) {
-    var target = e.target.closest('a, button, .cta, .button, [id*="cta"], [class*="cta"], [id*="play"], [class*="play"], #canvas, canvas');
+    var target = e.target.closest('a, button, .cta, .button, [id*="cta"], [class*="cta"], [id*="play"], [class*="play"]');
     if (target || (e.clientX > window.innerWidth - 150 && e.clientY > window.innerHeight - 80)) {
         exitAd();
     }

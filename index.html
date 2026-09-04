@@ -17,7 +17,7 @@
         <div class="flex-1">
             <header class="mb-8">
                 <h1 class="text-3xl font-bold text-slate-800">Playable Ad Converter</h1>
-                <p class="text-slate-500 mt-2 text-sm">Google Ads Compliant. Strips 4th-Party Calls & Studio Enabler to fix Validator Errors.</p>
+                <p class="text-slate-500 mt-2 text-sm">Google Ads Compliant. Strips 4th-Party Network Calls & External Stylesheets.</p>
             </header>
 
             <!-- App Link Input -->
@@ -78,7 +78,7 @@
             </div>
 
             <div class="mt-6 p-4 rounded-xl bg-emerald-50 text-emerald-700 font-medium text-center border border-emerald-200">
-                <span class="block text-sm">Status: <strong>PASS</strong> | Studio & 4th-Party Calls: <strong>Cleaned</strong></span>
+                <span class="block text-sm">Status: <strong>PASS</strong> | 4th-Party Calls & Stylesheets: <strong>Neutralized</strong></span>
                 <span class="block text-xs mt-1 text-emerald-600">Final Size: <span id="package-size">0 KB</span></span>
             </div>
 
@@ -266,14 +266,14 @@ ${sEnd}`;
             }
         }
 
-        // GOOGLE ADS COMPLIANT EXIT & VALIDATOR CLEANER ROUTINE
+        // GOOGLE ADS COMPLIANT EXIT & 4TH-PARTY NEUTRALIZER ROUTINE
         function convertApplovinExit(html, appLink) {
-            log("Applying Validator Rules: Upgrading URLs to HTTPS & Stripping 4th Party / Studio Calls...");
+            log("Applying Validator Rules: Stripping 4th Party Scripts, External Stylesheets & Network Calls...");
             
-            // 1. Force secure HTTPS on links to pass Secure URL check
+            // 1. Force secure HTTPS on links
             html = html.replace(/(['"])http:\/\//g, '$1https://');
 
-            // 2. Strip unauthorized external script tags to pass 4th Party Calls & Studio checks
+            // 2. Strip unauthorized external script tags to pass 4th Party Calls check
             html = html.replace(/<script[^>]+src=["'](https?:\/\/[^"']+)["'][^>]*>[\s\S]*?<\/script>/gi, (match, src) => {
                 if (src.includes('googlesyndication.com') || src.includes('exitapi.js')) {
                     return match;
@@ -289,7 +289,14 @@ ${sEnd}`;
                 return '';
             });
 
-            // 3. Convert network SDK exit triggers
+            // 3. Strip external stylesheets/links to prevent 4th-party calls
+            html = html.replace(/<link[^>]+rel=["']stylesheet["'][^>]+href=["'](https?:\/\/[^"']+)["'][^>]*>/gi, (match, href) => {
+                if (href.includes('googlesyndication.com')) return match;
+                log(`Stripped external stylesheet: ${href}`);
+                return '';
+            });
+
+            // 4. Convert network SDK exit triggers
             html = html.replace(/mraid\.open\(/g, "exitAd(");
             html = html.replace(/super_open\(/g, "exitAd(");
             html = html.replace(/dapi\.openStoreUrl\(/g, "exitAd(");
@@ -300,6 +307,22 @@ ${sEnd}`;
 <meta name="ad.size" content="width=320,height=480">
 <script type="text/javascript" src="https://tpc.googlesyndication.com/pagead/gadgets/html5/api/exitapi.js">${sEnd}
 <script>
+// RUNTIME 4TH-PARTY NETWORK BLOCKER FOR GOOGLE ADS COMPLIANCE
+window.fetch = function() {
+    return Promise.reject(new Error("Network calls disabled for Google Ads compliance"));
+};
+window.XMLHttpRequest = function() {
+    return {
+        open: function() {},
+        send: function() {},
+        setRequestHeader: function() {},
+        readyState: 4,
+        status: 200,
+        responseText: "{}"
+    };
+};
+navigator.sendBeacon = function() { return true; };
+
 var clickTag = "${appLink}";
 
 function exitAd(url){
@@ -500,7 +523,7 @@ ${sEnd}
                     const cocosPatched = await extractCocosPayload(htmlText);
                     if (cocosPatched) htmlText = cocosPatched;
 
-                    log("Applying Google Ads ExitApi, MRAID & DAPI polyfills...");
+                    log("Applying Google Ads ExitApi, MRAID & Network Protection...");
                     htmlText = convertApplovinExit(htmlText, appLink);
                     finalZip.file('index.html', htmlText);
                 }

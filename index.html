@@ -17,14 +17,14 @@
         <div class="flex-1">
             <header class="mb-8">
                 <h1 class="text-3xl font-bold text-slate-800">Playable Ad Converter</h1>
-                <p class="text-slate-500 mt-2 text-sm">Drag & Drop supported. Auto-Fetches JS. Cocos Engine Base64 Unpacker, MRAID 2.0 & DAPI Polyfills.</p>
+                <p class="text-slate-500 mt-2 text-sm">Drag & Drop supported. Auto-Fetches JS. Cocos Base64 Unpacker, Universal Bridges & Click-Hijack Prevention.</p>
             </header>
 
             <!-- App Link Input -->
             <div class="mb-6">
                 <label class="block text-sm font-bold text-slate-700 mb-2">Redirect App Link (Final URL) <span class="text-red-500">*</span></label>
                 <input type="url" id="app-link" placeholder="https://play.google.com/store/apps/details?id=com.your.game" class="w-full border-2 border-slate-300 rounded-xl p-3 focus:border-indigo-500 focus:outline-none transition">
-                <p class="text-xs text-slate-400 mt-1">This URL will be injected as the Google Ads clickTag.</p>
+                <p class="text-xs text-slate-400 mt-1">This URL will be injected as the Google Ads clickTag / Enabler Exit target.</p>
             </div>
 
             <!-- Main Upload Box -->
@@ -78,7 +78,7 @@
             </div>
 
             <div class="mt-6 p-4 rounded-xl bg-emerald-50 text-emerald-700 font-medium text-center border border-emerald-200">
-                <span class="block text-sm">Status: <strong>PASS</strong> | ClickTag: <strong>True</strong></span>
+                <span class="block text-sm">Status: <strong>PASS</strong> | ClickTag & Enabler: <strong>Injected</strong></span>
                 <span class="block text-xs mt-1 text-emerald-600">Final Size: <span id="package-size">0 KB</span></span>
             </div>
 
@@ -158,7 +158,6 @@
             btn.disabled = false;
         });
 
-        // Binary Validation & Decoder Helpers
         function isValidImage(buffer, filename) {
             const name = filename.toLowerCase();
             if (buffer.length < 8) return false;
@@ -195,7 +194,6 @@
             return bytes;
         }
 
-        // AppLovin Payload Extractor
         function extractAppLovinPayload(jsContent) {
             const match = jsContent.match(/al_renderHtml\s*\(\s*(\{[\s\S]+\}|["'][\s\S]+["'])\s*\)/);
             if (match && match[1]) {
@@ -212,7 +210,6 @@
             return null;
         }
 
-        // Cocos Engine Base64 Unpacker Routine
         async function extractCocosPayload(htmlText) {
             const zipMatch = htmlText.match(/(?:window\.__zip\s*=\s*|var\s+__zip\s*=\s*)(["'][\s\S]+?["']|\[[\s\S]+?\]);/);
             if (!zipMatch) return null;
@@ -230,7 +227,6 @@
             try {
                 const zipBytes = base64ToUint8Array(base64Data);
                 const zip = await JSZip.loadAsync(zipBytes);
-                
                 let resMap = {};
                 const assetPromises = [];
 
@@ -246,7 +242,6 @@
                 });
 
                 await Promise.all(assetPromises);
-
                 log(`Successfully unpacked ${Object.keys(resMap).length} Cocos assets from base64 __zip array.`);
 
                 const superEvalPatch = `
@@ -265,15 +260,23 @@ ${sEnd}`;
             }
         }
 
-        // Universal Exit & Polyfill Injection Routine
+        // UNIVERSAL EXIT & COMPLIANCE INJECTION ROUTINE
         function convertApplovinExit(html, appLink) {
+            // Strip network scripts
+            html = html.replace(/<script[^>]*src=["'][^"']*mraid\.js["'][^>]*><\/script>/gi, '');
+            html = html.replace(/<script[^>]*src=["'][^"']*applovin[^"']*["'][^>]*><\/script>/gi, '');
+
+            // Convert raw API exit calls
             html = html.replace(/mraid\.open\(/g, "exitAd(");
             html = html.replace(/super_open\(/g, "exitAd(");
             html = html.replace(/dapi\.openStoreUrl\(/g, "exitAd(");
+            html = html.replace(/AppLovin\.handleClick\(/g, "exitAd(");
+            html = html.replace(/Unity\.openUrl\(/g, "exitAd(");
 
             const exitScript = `
-<!-- Google Ads Official Exit API, MRAID & DAPI Polyfills -->
+<meta name="ad.size" content="width=320,height=480">
 <script type="text/javascript" src="https://tpc.googlesyndication.com/pagead/gadgets/html5/api/exitapi.js">${sEnd}
+<script type="text/javascript" src="https://s0.2mdn.net/ads/studio/Enabler.js">${sEnd}
 <script>
 var clickTag = "${appLink}";
 
@@ -281,12 +284,18 @@ function exitAd(url){
     var target = url || clickTag;
     if (typeof ExitApi !== 'undefined' && ExitApi.exit) {
         ExitApi.exit();
-    } else if(target) {
+    } else if (typeof Enabler !== 'undefined' && Enabler.isInitialized()) {
+        Enabler.exit('Universal_Exit', target);
+    } else if (typeof Enabler !== 'undefined') {
+        Enabler.addEventListener(studio.events.StudioEvent.INIT, function () {
+            Enabler.exit('Universal_Exit', target);
+        });
+    } else {
         window.open(target, "_blank");
     }
 }
 
-// FULL ADVANCED MRAID MOCK API
+// MRAID 2.0 API BRIDGE
 window.mraid = window.mraid || {
     listeners: {},
     addEventListener: function (event, handler) {
@@ -314,7 +323,7 @@ window.mraid = window.mraid || {
     setResizeProperties: function() {}
 };
 
-// FULL IRONSOURCE DAPI MOCK API WITH isReady FIX
+// IRONSOURCE DAPI POLYFILL
 window.dapi = window.dapi || {
     isDapi: true,
     isReady: function() { return true; },
@@ -329,6 +338,20 @@ window.dapi = window.dapi || {
     openStoreUrl: function(url) { exitAd(url); }
 };
 
+// APPLOVIN & UNITY SDK BRIDGES
+window.AppLovin = window.AppLovin || { handleClick: function(u) { exitAd(u); } };
+window.Unity = window.Unity || { openUrl: function(u) { exitAd(u); } };
+
+// DOM EVENT BUBBLING & CLICK-HIJACK ISOLATION
+document.addEventListener('DOMContentLoaded', function() {
+    var controlSelectors = '.control, .ui-btn, .sound-toggle, .carousel-arrow, video, audio, [class*="sound"], [class*="close"]';
+    document.querySelectorAll(controlSelectors).forEach(function(el) {
+        el.addEventListener('click', function(e) {
+            e.stopPropagation();
+        }, { capture: true });
+    });
+});
+
 var originalWindowOpen = window.open;
 window.open = function(url, target, features) { exitAd(url); };
 
@@ -339,6 +362,10 @@ document.addEventListener('click', function(e) {
     }
 }, { capture: true, passive: true });
 ${sEnd}
+<style>
+  .cta-layer, #cta, .exit-bg { z-index: 1 !important; }
+  .ui-btn, .sound-toggle, .carousel-arrow, .control, video, audio { z-index: 9999 !important; position: relative; }
+</style>
 `;
             if (html.includes("<head>")) {
                 html = html.replace("<head>", "<head>" + exitScript);
@@ -348,16 +375,13 @@ ${sEnd}
             return html;
         }
 
-        // Multi-File ZIP Archive Processor Routine
         async function processZipArchive(zipBuffer, appLink) {
             log("Reading ZIP archive entries...");
             const zip = await JSZip.loadAsync(zipBuffer);
             const finalZip = new JSZip();
-            
             let htmlFileName = null;
             let htmlContent = null;
 
-            // Search for primary HTML file
             zip.forEach((relativePath, file) => {
                 if (!file.dir && !relativePath.includes('__MACOSX') && !relativePath.startsWith('.')) {
                     if (relativePath.toLowerCase().endsWith('.html')) {
@@ -375,7 +399,6 @@ ${sEnd}
             log(`Primary HTML target identified: ${htmlFileName}`);
             htmlContent = await zip.file(htmlFileName).async('string');
 
-            // Copy non-junk asset files
             const assetPromises = [];
             zip.forEach((relativePath, file) => {
                 if (!file.dir && !relativePath.includes('__MACOSX') && !relativePath.startsWith('.')) {
@@ -394,15 +417,11 @@ ${sEnd}
             });
 
             await Promise.all(assetPromises);
-
-            // Apply exit scripts and polyfills
             htmlContent = convertApplovinExit(htmlContent, appLink);
             finalZip.file('index.html', htmlContent);
-
             return finalZip;
         }
 
-        // Main Converter Execution Flow
         document.getElementById('convert-btn').addEventListener('click', async () => {
             if (!uploadedFile) {
                 alert("Please upload an ad file first!");
@@ -410,7 +429,6 @@ ${sEnd}
             }
             
             let appLink = document.getElementById('app-link').value.trim() || "https://www.google.com";
-
             const btn = document.getElementById('convert-btn');
             btn.textContent = 'Processing...';
             btn.disabled = true;
@@ -446,13 +464,13 @@ ${sEnd}
                             let externalJsUrls = [];
                             
                             while ((match = scriptRegex.exec(htmlText)) !== null) {
-                                if (!match[1].includes('exitapi.js') && !match[1].includes('dapi.js')) {
+                                if (!match[1].includes('exitapi.js') && !match[1].includes('dapi.js') && !match[1].includes('Enabler.js')) {
                                     externalJsUrls.push(match[1]);
                                 }
                             }
                             
                             if (externalJsUrls.length > 0) {
-                                log(`Detected ${externalJsUrls.length} external JS link(s). Attempting to auto-fetch...`);
+                                log(`Detected ${externalJsUrls.length} external JS link(s). Attempting auto-fetch...`);
                                 for (let url of externalJsUrls) {
                                     try {
                                         log(`Fetching: ${url}`);
@@ -470,7 +488,7 @@ ${sEnd}
                                     }
                                 }
                                 if (!payload) {
-                                    throw new Error("This ad stores its layout inside an external URL blocked by browser CORS.\n\nTo fix: Open the script URL (e.g. res1.applovin.com) in a browser tab, press Ctrl+S to save the JS file, and upload it to '2. Manual JS Payload'.");
+                                    throw new Error("This ad stores its layout inside an external URL blocked by browser CORS.\n\nTo fix: Open the script URL in a browser tab, press Ctrl+S to save the JS file, and upload it to '2. Manual JS Payload'.");
                                 }
                             }
                         }
@@ -478,11 +496,10 @@ ${sEnd}
 
                     if (payload) htmlText = payload;
 
-                    // Check for Cocos Engine embedded base64 zip array payload
                     const cocosPatched = await extractCocosPayload(htmlText);
                     if (cocosPatched) htmlText = cocosPatched;
 
-                    log("Applying Google Ads ExitApi, MRAID, and DAPI polyfills...");
+                    log("Applying Universal Exit Bridges, Enabler SDK & Click Isolation...");
                     htmlText = convertApplovinExit(htmlText, appLink);
                     finalZip.file('index.html', htmlText);
                 }

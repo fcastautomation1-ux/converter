@@ -17,7 +17,7 @@
         <div class="flex-1">
             <header class="mb-8">
                 <h1 class="text-3xl font-bold text-slate-800">Playable Ad Converter</h1>
-                <p class="text-slate-500 mt-2 text-sm">Drag & Drop supported. Auto-Fetches JS. Cocos Base64 Unpacker, Universal Bridges & Click-Hijack Prevention.</p>
+                <p class="text-slate-500 mt-2 text-sm">Drag & Drop supported. Universal Adapter injected. Fixes 4th-Party Calls, Secure URLs & Click-Hijacking.</p>
             </header>
 
             <!-- App Link Input -->
@@ -78,7 +78,7 @@
             </div>
 
             <div class="mt-6 p-4 rounded-xl bg-emerald-50 text-emerald-700 font-medium text-center border border-emerald-200">
-                <span class="block text-sm">Status: <strong>PASS</strong> | ClickTag & Enabler: <strong>Injected</strong></span>
+                <span class="block text-sm">Status: <strong>PASS</strong> | Universal Enabler: <strong>Injected</strong></span>
                 <span class="block text-xs mt-1 text-emerald-600">Final Size: <span id="package-size">0 KB</span></span>
             </div>
 
@@ -119,20 +119,28 @@
                 dropZone.addEventListener(evt, () => dropZone.classList.remove('drop-active'));
             });
 
-            const handleFile = (file) => {
-                if (isJs) jsFile = file; else uploadedFile = file;
-                labelDiv.classList.add('hidden');
-                infoDiv.classList.remove('hidden');
-                infoDiv.textContent = `${isJs ? 'JS File' : 'Main File'}: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
-                log(`${isJs ? 'Manual JS' : 'Main ad'} file loaded: ${file.name}`);
-            };
-
+            // FIXED: Explicitly handle the drop event for drag-and-drop functionality
             dropZone.addEventListener('drop', (e) => {
-                if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+                if (e.dataTransfer.files.length) {
+                    const file = e.dataTransfer.files[0];
+                    if (isJs) jsFile = file; else uploadedFile = file;
+                    labelDiv.classList.add('hidden');
+                    infoDiv.classList.remove('hidden');
+                    infoDiv.textContent = `${isJs ? 'JS File' : 'Main File'}: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
+                    log(`${isJs ? 'Manual JS' : 'Main ad'} file loaded: ${file.name}`);
+                }
             });
 
+            // Handle manual click-to-upload
             fileInput.addEventListener('change', (e) => {
-                if (e.target.files.length) handleFile(e.target.files[0]);
+                if (e.target.files.length) {
+                    const file = e.target.files[0];
+                    if (isJs) jsFile = file; else uploadedFile = file;
+                    labelDiv.classList.add('hidden');
+                    infoDiv.classList.remove('hidden');
+                    infoDiv.textContent = `${isJs ? 'JS File' : 'Main File'}: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
+                    log(`${isJs ? 'Manual JS' : 'Main ad'} file loaded: ${file.name}`);
+                }
             });
         }
 
@@ -260,13 +268,23 @@ ${sEnd}`;
             }
         }
 
-        // UNIVERSAL EXIT & COMPLIANCE INJECTION ROUTINE
+        // UNIVERSAL EXIT, VALIDATOR FIXES & COMPLIANCE INJECTION ROUTINE
         function convertApplovinExit(html, appLink) {
-            // Strip network scripts
-            html = html.replace(/<script[^>]*src=["'][^"']*mraid\.js["'][^>]*><\/script>/gi, '');
-            html = html.replace(/<script[^>]*src=["'][^"']*applovin[^"']*["'][^>]*><\/script>/gi, '');
+            log("Applying Validator Fixes: Converting HTTP to HTTPS & Stripping 4th Party SDK Calls...");
+            
+            // 1. FIX: Secure URL check (Convert http:// to https:// to pass Google Ads validation)
+            html = html.replace(/(['"])http:\/\//g, '$1https://');
 
-            // Convert raw API exit calls
+            // 2. FIX: 4th Party calls check (Aggressively strip network SDKs and tracking pixels)
+            const blocklist = ['mraid.js', 'applovin', 'unity', 'pingle', 'vungle', 'ironsource', 'mintegral', 'chartboost', 'facebook.com', 'google-analytics'];
+            blocklist.forEach(keyword => {
+                const regex = new RegExp(`<script[^>]*src=["'][^"']*${keyword}[^"']*["'][^>]*>[\\s\\S]*?<\\/script>`, 'gi');
+                html = html.replace(regex, '');
+            });
+            // Catch inline document.write injected scripts
+            html = html.replace(/document\.write\(['"]<script[^>]*src=['"][^'"]*mraid\.js['"][^>]*><\/script>['"]\);?/gi, '');
+
+            // 3. Convert raw API exit calls to universal bridge
             html = html.replace(/mraid\.open\(/g, "exitAd(");
             html = html.replace(/super_open\(/g, "exitAd(");
             html = html.replace(/dapi\.openStoreUrl\(/g, "exitAd(");
@@ -355,6 +373,7 @@ document.addEventListener('DOMContentLoaded', function() {
 var originalWindowOpen = window.open;
 window.open = function(url, target, features) { exitAd(url); };
 
+// FIXED: Removed '#canvas, canvas' from closest() to allow game interactivity without triggering exits
 document.addEventListener('click', function(e) {
     var target = e.target.closest('a, button, .cta, .button, [id*="cta"], [class*="cta"], [id*="play"], [class*="play"]');
     if (target || (e.clientX > window.innerWidth - 150 && e.clientY > window.innerHeight - 80)) {

@@ -17,7 +17,7 @@
         <div class="flex-1">
             <header class="mb-8">
                 <h1 class="text-3xl font-bold text-slate-800">Playable Ad Converter</h1>
-                <p class="text-slate-500 mt-2 text-sm">Google Ads Compliant. Strips External AdNxs / MRAID SDKs.</p>
+                <p class="text-slate-500 mt-2 text-sm">Google Ads Compliant. Deep String Purge Enabled.</p>
             </header>
 
             <!-- App Link Input -->
@@ -78,7 +78,7 @@
             </div>
 
             <div class="mt-6 p-4 rounded-xl bg-emerald-50 text-emerald-700 font-medium text-center border border-emerald-200">
-                <span class="block text-sm">Status: <strong>PASS</strong> | AdNxs / MRAID URL: <strong>Purged</strong></span>
+                <span class="block text-sm">Status: <strong>PASS</strong> | AdNxs Strings: <strong>Deeply Purged</strong></span>
                 <span class="block text-xs mt-1 text-emerald-600">Final Size: <span id="package-size">0 KB</span></span>
             </div>
 
@@ -266,14 +266,19 @@ ${sEnd}`;
             }
         }
 
-        // GOOGLE ADS COMPLIANT EXIT & 4TH-PARTY NEUTRALIZER ROUTINE
+        // DEEP SCRUBBER & GOOGLE ADS COMPLIANT EXIT ROUTINE
         function convertApplovinExit(html, appLink) {
-            log("Applying Validator Rules: Stripping AdNxs, MRAID & External Network Calls...");
+            log("Applying Deep String Purge: Erasing all AdNxs & MRAID text references...");
             
             // 1. Force secure HTTPS on links
             html = html.replace(/(['"])http:\/\//g, '$1https://');
 
-            // 2. Aggressively strip ANY external script tags except Google ExitApi and Google-hosted jQuery
+            // 2. DEEP TEXT PURGE: Erase any occurrence of adnxs.com or mraid.js strings anywhere in the code
+            html = html.replace(/['"][^'"]*adnxs\.com[^'"]*['"]/gi, '""');
+            html = html.replace(/https?:\/\/[^"'\s]*adnxs\.com[^"'\s]*/gi, '');
+            html = html.replace(/https?:\/\/[^"'\s]*mraid\.js[^"'\s]*/gi, '');
+
+            // 3. Aggressively strip ANY unauthorized external script tags
             html = html.replace(/<script[^>]+src=["'](https?:\/\/[^"']+)["'][^>]*>[\s\S]*?<\/script>/gi, (match, src) => {
                 if (src.includes('googlesyndication.com') || src.includes('exitapi.js') || src.includes('ajax.googleapis.com')) {
                     return match;
@@ -289,14 +294,14 @@ ${sEnd}`;
                 return '';
             });
 
-            // 3. Strip external stylesheets/links to prevent 4th-party calls
+            // 4. Strip external stylesheets/links
             html = html.replace(/<link[^>]+rel=["']stylesheet["'][^>]+href=["'](https?:\/\/[^"']+)["'][^>]*>/gi, (match, href) => {
                 if (href.includes('googlesyndication.com') || href.includes('fonts.googleapis.com')) return match;
                 log(`Stripped external stylesheet: ${href}`);
                 return '';
             });
 
-            // 4. Convert network SDK exit triggers
+            // 5. Convert network SDK exit triggers
             html = html.replace(/mraid\.open\(/g, "exitAd(");
             html = html.replace(/super_open\(/g, "exitAd(");
             html = html.replace(/dapi\.openStoreUrl\(/g, "exitAd(");

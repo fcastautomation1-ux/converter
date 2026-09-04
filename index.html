@@ -7,19 +7,17 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <style>
-        /* Smooth transitions for drag-and-drop */
         .drop-active { border-color: #6366f1 !important; background-color: #e0e7ff !important; }
     </style>
 </head>
 <body class="bg-slate-50 min-h-screen py-10 px-4">
-    <!-- Changed max-w-4xl to max-w-6xl to fix preview cutoff -->
     <div class="max-w-6xl mx-auto bg-white rounded-2xl shadow-xl overflow-hidden p-8 flex flex-col md:flex-row gap-8">
         
         <!-- LEFT COLUMN: Controls -->
         <div class="flex-1">
             <header class="mb-8">
                 <h1 class="text-3xl font-bold text-slate-800">Playable Ad Converter</h1>
-                <p class="text-slate-500 mt-2 text-sm">Drag & Drop supported. Auto-Fetches JS. Full MRAID 2.0 Polyfill.</p>
+                <p class="text-slate-500 mt-2 text-sm">Drag & Drop supported. Auto-Fetches JS. MRAID 2.0 & DAPI Polyfills.</p>
             </header>
 
             <!-- App Link Input -->
@@ -44,11 +42,11 @@
 
             <!-- Optional JS Upload Box -->
             <div class="mb-6">
-                <label class="block text-sm font-bold text-slate-700 mb-2">2. Manual JS Payload <span class="text-slate-400 font-normal">(Only if Auto-Fetch fails)</span></label>
+                <label class="block text-sm font-bold text-slate-700 mb-2">2. Manual JS Payload <span class="text-indigo-600 font-normal">(Required if CORS blocks auto-fetch)</span></label>
                 <div class="border-2 border-dashed border-slate-300 rounded-xl p-6 text-center transition cursor-pointer bg-slate-50 relative" id="drop-zone-js">
                     <input type="file" id="file-js" accept=".js,.txt" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
                     <div id="label-js" class="pointer-events-none">
-                        <p class="text-slate-600 font-medium">Drag & drop manual JS loader here</p>
+                        <p class="text-slate-600 font-medium">Drag & drop manual JS payload file here</p>
                     </div>
                     <div id="info-js" class="hidden text-indigo-600 font-semibold pointer-events-none"></div>
                 </div>
@@ -95,9 +93,6 @@
         let jsFile = null;
         const sEnd = "</" + "script>";
 
-        // ==========================================
-        // UI & DRAG-AND-DROP LOGIC
-        // ==========================================
         function log(message) {
             const box = document.getElementById('log-box');
             box.classList.remove('hidden');
@@ -124,29 +119,20 @@
                 dropZone.addEventListener(evt, () => dropZone.classList.remove('drop-active'));
             });
 
-            // Added drop listener to grab files from drag and drop
+            const handleFile = (file) => {
+                if (isJs) jsFile = file; else uploadedFile = file;
+                labelDiv.classList.add('hidden');
+                infoDiv.classList.remove('hidden');
+                infoDiv.textContent = `${isJs ? 'JS File' : 'Main File'}: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
+                log(`${isJs ? 'Manual JS' : 'Main ad'} file loaded: ${file.name}`);
+            };
+
             dropZone.addEventListener('drop', (e) => {
-                if (e.dataTransfer.files.length) {
-                    const file = e.dataTransfer.files[0];
-                    if (isJs) jsFile = file; else uploadedFile = file;
-                    
-                    labelDiv.classList.add('hidden');
-                    infoDiv.classList.remove('hidden');
-                    infoDiv.textContent = `${isJs ? 'JS File' : 'Main File'}: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
-                    log(`${isJs ? 'Manual JS' : 'Main ad'} file loaded: ${file.name}`);
-                }
+                if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
             });
 
             fileInput.addEventListener('change', (e) => {
-                if (e.target.files.length) {
-                    const file = e.target.files[0];
-                    if (isJs) jsFile = file; else uploadedFile = file;
-                    
-                    labelDiv.classList.add('hidden');
-                    infoDiv.classList.remove('hidden');
-                    infoDiv.textContent = `${isJs ? 'JS File' : 'Main File'}: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
-                    log(`${isJs ? 'Manual JS' : 'Main ad'} file loaded: ${file.name}`);
-                }
+                if (e.target.files.length) handleFile(e.target.files[0]);
             });
         }
 
@@ -172,9 +158,6 @@
             btn.disabled = false;
         });
 
-        // ==========================================
-        // CONVERTER HELPER FUNCTIONS
-        // ==========================================
         function isValidImage(buffer, filename) {
             const name = filename.toLowerCase();
             if (buffer.length < 8) return false;
@@ -218,7 +201,6 @@
                     let parsed = JSON.parse(match[1]);
                     return parsed.html ? parsed.html : parsed;
                 } catch (e) {
-                    console.warn("JSON.parse failed on AppLovin payload, attempting eval fallback", e);
                     try {
                         let evaled = eval('(' + match[1] + ')');
                         return evaled.html ? evaled.html : evaled;
@@ -231,9 +213,10 @@
         function convertApplovinExit(html, appLink) {
             html = html.replace(/mraid\.open\(/g, "exitAd(");
             html = html.replace(/super_open\(/g, "exitAd(");
+            html = html.replace(/dapi\.openStoreUrl\(/g, "exitAd(");
 
             const exitScript = `
-<!-- Google Ads Official Exit API & MRAID Polyfill -->
+<!-- Google Ads Official Exit API, MRAID & DAPI Polyfills -->
 <script type="text/javascript" src="https://tpc.googlesyndication.com/pagead/gadgets/html5/api/exitapi.js">${sEnd}
 <script>
 var clickTag = "${appLink}";
@@ -265,7 +248,6 @@ window.mraid = window.mraid || {
     useCustomClose: function () {},
     getVersion: function() { return "2.0"; },
     getPlacementType: function() { return "interstitial"; },
-    // These sizing functions fix the "getMaxSize is not a function" crash:
     getMaxSize: function() { return { width: window.innerWidth || 320, height: window.innerHeight || 480 }; },
     getScreenSize: function() { return { width: window.screen ? window.screen.width : 320, height: window.screen ? window.screen.height : 480 }; },
     getDefaultPosition: function() { return { x: 0, y: 0, width: window.innerWidth || 320, height: window.innerHeight || 480 }; },
@@ -275,12 +257,24 @@ window.mraid = window.mraid || {
     getResizeProperties: function() { return { width: 320, height: 480, offsetX: 0, offsetY: 0, customClosePosition: 'top-right', allowOffscreen: true }; },
     setResizeProperties: function() {}
 };
-window.mraid.open = function(url) { exitAd(url); }; 
+
+// FULL IRONSOURCE DAPI MOCK API
+window.dapi = window.dapi || {
+    isDapi: true,
+    addEventListener: function(event, handler) {
+        if (event === 'ready') setTimeout(handler, 10);
+        if (event === 'viewableChange') setTimeout(function(){ handler({isViewable: true}); }, 10);
+    },
+    removeEventListener: function() {},
+    isViewable: function() { return true; },
+    getScreenSize: function() { return { width: window.innerWidth || 320, height: window.innerHeight || 480 }; },
+    getAudioVolume: function() { return 100; },
+    openStoreUrl: function(url) { exitAd(url); }
+};
 
 var originalWindowOpen = window.open;
 window.open = function(url, target, features) { exitAd(url); };
 
-// Removed '#canvas, canvas' from closest() to prevent intercepting gameplay clicks
 document.addEventListener('click', function(e) {
     var target = e.target.closest('a, button, .cta, .button, [id*="cta"], [class*="cta"], [id*="play"], [class*="play"]');
     if (target || (e.clientX > window.innerWidth - 150 && e.clientY > window.innerHeight - 80)) {
@@ -289,177 +283,21 @@ document.addEventListener('click', function(e) {
 }, { capture: true, passive: true });
 ${sEnd}
 `;
-            if (html.includes("</head>")) {
-                html = html.replace("</head>", exitScript + "</head>");
+            if (html.includes("<head>")) {
+                html = html.replace("<head>", "<head>" + exitScript);
             } else {
                 html = exitScript + html;
             }
             return html;
         }
 
-        function convertCocosLoader(html) {
-            html = html.replace(/\.\/\.\.\/cocos-js\/cc\.js/g, "./cocos-js/cc.js");
-            html = html.replace(/<script>\s*\(function\(global\)[\s\S]*?<\/script>/g, "");
-
-            const placeholders = ["/* COCOS_SYSTEM_JS_PLACEHOLDER */", "/* COCOS_INDEX_JS_PLACEHOLDER */", "<!-- COCOS_RUNTIME_PLACEHOLDER -->", "<!-- COCOS_BOOT_PLACEHOLDER -->"];
-            for (let ph of placeholders) html = html.split(ph).join("");
-
-            html = html.replace(/<script[^>]*src=["'](?:\.\/)?index\.js["'][^>]*><\/script>/gi, "");
-
-            const runtime_placeholder = "\n<!-- COCOS_RUNTIME_PLACEHOLDER -->\n";
-            const boot_placeholder = `\n<script>\n(function () {\n    function bootCocos() {\n        if (!window.System || !System.import) { return; }\n        System.import("./index.js").catch(function (error) { console.error("COCOS BOOT FAILED", error); });\n    }\n    bootCocos();\n})();\n${sEnd}\n`;
-
-            if (html.includes("systemjs-importmap")) {
-                html = html.replace('<script type="systemjs-importmap">', runtime_placeholder + '\n<script type="systemjs-importmap">');
-            } else {
-                const fallback_import_map = `\n<script type="systemjs-importmap">\n{\n    "imports": { "cc": "./cocos-js/cc.js" }\n}\n${sEnd}\n`;
-                if (html.includes("</head>")) {
-                    html = html.replace("</head>", runtime_placeholder + fallback_import_map + "\n</head>");
-                } else {
-                    html = runtime_placeholder + fallback_import_map + html;
-                }
-            }
-
-            if (html.includes("</body>")) {
-                html = html.replace("</body>", boot_placeholder + "\n</body>");
-            } else {
-                html += "\n" + boot_placeholder;
-            }
-            return html;
-        }
-
-        const buildCleanCocosHtml = (resContent, appLink) => {
-            return `<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8">
-    <meta name="ad.size" content="width=320,height=480">
-    <title>Playable Ad</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <style>
-        html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #000000; }
-        #GameDiv { position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: hidden; }
-        #GameCanvas { width: 100%; height: 100%; display: block; outline: none; touch-action: none; }
-    </style>
-
-    <!-- Google Ads Official Exit API Script -->
-    <script type="text/javascript" src="https://tpc.googlesyndication.com/pagead/gadgets/html5/api/exitapi.js">${sEnd}
-
-<script type="text/javascript">
-    window.clickTag = "${appLink}";
-
-    var originalWindowOpen = window.open;
-    window.open = function(url, target, features) {
-        if (typeof ExitApi !== "undefined") {
-            ExitApi.exit();
-        } else {
-            originalWindowOpen(window.clickTag, "_blank");
-        }
-    };
-
-    window.exitAd = function () { window.open(window.clickTag, "_blank"); };
-
-    window.mraid = window.mraid || {
-        listeners: {},
-        addEventListener: function (event, handler) {
-            if(event === 'ready') setTimeout(handler, 10);
-            if(event === 'viewableChange') setTimeout(function(){ handler(true); }, 10);
-        },
-        removeEventListener: function () {},
-        isViewable: function () { return true; },
-        getState: function () { return "default"; },
-        open: function (url) { window.exitAd(); },
-        close: function () {},
-        getVersion: function() { return "2.0"; },
-        getPlacementType: function() { return "interstitial"; },
-        getMaxSize: function() { return { width: window.innerWidth || 320, height: window.innerHeight || 480 }; },
-        getScreenSize: function() { return { width: window.screen ? window.screen.width : 320, height: window.screen ? window.screen.height : 480 }; },
-        getDefaultPosition: function() { return { x: 0, y: 0, width: window.innerWidth || 320, height: window.innerHeight || 480 }; },
-        getCurrentPosition: function() { return { x: 0, y: 0, width: window.innerWidth || 320, height: window.innerHeight || 480 }; }
-    };
-
-    window.super_html = window.super_html || {};
-    window.super_html.download = window.exitAd;
-
-    function _createLocalJSElement(url) {
-        var script = document.createElement("script");
-        script.src = url;
-        script.async = true;
-        return script;
-    }
-    window._createLocalJSElement = _createLocalJSElement;
-
-    function super_eval(url) {
-        var resources = window.__res || {};
-        var key = url;
-        var code = resources[key];
-
-        if (!code) {
-            for (var candidate in resources) {
-                if (url.indexOf(candidate) !== -1 && url.indexOf(candidate) + candidate.length === url.length) {
-                    key = candidate;
-                    code = resources[candidate];
-                    break;
-                }
-            }
-        }
-        if (!code) return;
-
-        code = String(code);
-        code = code.replace(/window\\.location\\.href\\s*=\\s*[^;]+;/gi, "window.exitAd();");
-        code = code.replace(/location\\.href\\s*=\\s*[^;]+;/gi, "window.exitAd();");
-        code = code.replace(/super_html\\.download\\s*\\([^)]*\\)/gi, "window.exitAd()");
-        code = code.replace(/window\\.super_html\\.download\\s*\\([^)]*\\)/gi, "window.exitAd()");
-        code = code.replace(/mraid\\.open\\s*\\([^)]*\\)/gi, "window.exitAd()");
-        eval(code);
-        delete resources[key];
-    }
-    window.super_eval = super_eval;
-    ${sEnd}
-
-    <script>window.__res = ${resContent};${sEnd}
-    <script src="./@src/polyfills.bundle.js">${sEnd}
-    <script src="./@src/system.bundle.js">${sEnd}
-    <script type="systemjs-importmap">{ "imports": { "cc": "./cocos-js/cc.js" } }${sEnd}
-    <script src="./@src/cc.adapter.js">${sEnd}
-</head>
-<body>
-    <div id="GameDiv" cc_exact_fit_screen="true">
-        <canvas id="GameCanvas" oncontextmenu="event.preventDefault()" tabindex="99"></canvas>
-    </div>
-    <script>
-        (function () {
-            function startPlayable() {
-                if (typeof window.super_boot_engine === "function") {
-                    window.super_boot_engine();
-                } else if (window.System && window.System.import) {
-                    window.System.import("./index.js").catch(function(e){});
-                }
-            }
-            if (document.readyState === "loading") {
-                document.addEventListener("DOMContentLoaded", startPlayable);
-            } else {
-                startPlayable();
-            }
-        })();
-    ${sEnd}
-</body>
-</html>`;
-        };
-
-        // ==========================================
-        // MAIN EXECUTION
-        // ==========================================
         document.getElementById('convert-btn').addEventListener('click', async () => {
             if (!uploadedFile) {
                 alert("Please upload an ad file first!");
                 return;
             }
             
-            let appLink = document.getElementById('app-link').value.trim();
-            if (!appLink) {
-                appLink = "https://www.google.com"; // Default fallback
-            }
+            let appLink = document.getElementById('app-link').value.trim() || "https://www.google.com";
 
             const btn = document.getElementById('convert-btn');
             btn.textContent = 'Processing...';
@@ -468,13 +306,10 @@ ${sEnd}
             document.getElementById('log-box').innerHTML = '<div class="font-bold text-slate-400 mb-1">--- Live Processing Logs ---</div>';
 
             try {
-                let htmlText = "";
                 const arrayBuffer = await uploadedFile.arrayBuffer();
-                htmlText = new TextDecoder().decode(arrayBuffer);
-
+                let htmlText = new TextDecoder().decode(arrayBuffer);
                 let payload = null;
 
-                // 1. AppLovin & External JS Auto-Fetch Logic
                 if (jsFile) {
                     log("Processing manually uploaded companion JS file...");
                     const jsContent = await jsFile.text();
@@ -490,7 +325,7 @@ ${sEnd}
                         let externalJsUrls = [];
                         
                         while ((match = scriptRegex.exec(htmlText)) !== null) {
-                            if (!match[1].includes('exitapi.js')) {
+                            if (!match[1].includes('exitapi.js') && !match[1].includes('dapi.js')) {
                                 externalJsUrls.push(match[1]);
                             }
                         }
@@ -510,124 +345,22 @@ ${sEnd}
                                         break; 
                                     }
                                 } catch (e) {
-                                    log(`Fetch failed for ${url}. CORS policy block likely.`);
+                                    log(`Fetch failed for ${url}. (Browser CORS Blocked)`);
                                 }
                             }
-                            if(!payload) {
-                                throw new Error("Ad is a loader but auto-fetch failed (CORS block). Please manually download the .js file and drag it into the 'Manual JS Payload' box.");
+                            if (!payload) {
+                                throw new Error("This ad stores its layout inside an external URL blocked by browser CORS.\n\nTo fix: Open the script URL (e.g. res1.applovin.com) in a browser tab, press Ctrl+S to save the JS file, and upload it to '2. Manual JS Payload'.");
                             }
                         }
                     }
                 }
 
-                if (payload) {
-                    htmlText = payload;
-                }
+                if (payload) htmlText = payload;
 
-                // 2. Check for Embedded ZIP
-                let zipData = null;
-                let zipMatch = htmlText.match(/window\.__zip\s*=\s*"([^"]+)"/);
-                if (!zipMatch) zipMatch = htmlText.match(/window\.__zip\s*=\s*'([^']+)'/);
-                if (!zipMatch) zipMatch = htmlText.match(/__zip\s*[:=]\s*"([^"]+)"/);
+                log("Applying Google Ads ExitApi, MRAID, and DAPI polyfills...");
+                htmlText = convertApplovinExit(htmlText, appLink);
 
-                if (zipMatch) {
-                    zipData = zipMatch[1].replace(/\\n/g, "").replace(/\\"/g, '"');
-                }
-                
                 const finalZip = new JSZip();
-
-                if (zipData) {
-                    log("Detected embedded base64 ZIP (__zip). Decoding and parsing assets...");
-                    
-                    const binaryData = base64ToUint8Array(zipData);
-                    const unzipped = await JSZip.loadAsync(binaryData);
-                    
-                    let resources = {};
-                    let extractedCount = 0;
-                    let filteredCount = 0;
-
-                    for (let fn of Object.keys(unzipped.files)) {
-                        const fileName = fn.split('/').pop();
-                        
-                        if (fileName.startsWith('._') || fileName === '.DS_Store' || fileName === 'Thumbs.db' || fileName === 'desktop.ini' || fn.includes('__MACOSX')) {
-                            filteredCount++;
-                            continue;
-                        }
-
-                        const entry = unzipped.files[fn];
-                        if (entry.dir) continue;
-                        
-                        let buffer = await entry.async("uint8array");
-                        if (buffer.length === 0) { filteredCount++; continue; }
-
-                        let isFakeImage = false;
-                        if (fileName.toLowerCase().match(/\.(png|jpe?g)$/)) {
-                            if (!isValidImage(buffer, fileName)) {
-                                log(`Soft-skipping corrupt image: ${fileName}. Kept in memory, removed from physical ZIP.`);
-                                isFakeImage = true; 
-                                filteredCount++;
-                            }
-                        }
-
-                        extractedCount++;
-
-                        if (fn === '__res') {
-                            const resText = await entry.async('text');
-                            try { Object.assign(resources, JSON.parse(resText)); } catch(e) {}
-                            continue;
-                        }
-
-                        let textContent = null;
-                        try {
-                            let textDecoder = new TextDecoder('utf-8', {fatal: true});
-                            textContent = textDecoder.decode(buffer);
-                        } catch(e) { textContent = null; }
-
-                        if (textContent !== null) {
-                            if (fn.endsWith('cc.adapter.js') && !textContent.trim().startsWith('(function')) {
-                                textContent = "(function () {\n" + textContent + "\n})();\n";
-                            }
-                            resources[fn] = textContent;
-                            if (!isFakeImage) finalZip.file(fn, textContent);
-                        } else {
-                            let base64Content = await entry.async('base64');
-                            let mimeType = getMimeType(fileName);
-                            resources[fn] = `data:${mimeType};base64,${base64Content}`;
-                            if (!isFakeImage) finalZip.file(fn, buffer);
-                        }
-                    }
-                    
-                    log(`Extracted ${extractedCount} files. (Filtered ${filteredCount} junk files)`);
-
-                    let resJsonString = JSON.stringify(resources)
-                        .replace(/<\/script/gi, "<\\/script")
-                        .replace(/<!--/g, "<\\!--")
-                        .replace(/\u2028/g, "\\u2028")
-                        .replace(/\u2029/g, "\\u2029");
-
-                    htmlText = buildCleanCocosHtml(resJsonString, appLink);
-                    log("Built clean Cocos HTML with Python super_eval injected.");
-
-                } else {
-                    log("No embedded ZIP detected. Applying raw string replacements on HTML...");
-                    
-                    htmlText = convertApplovinExit(htmlText, appLink);
-                    htmlText = convertCocosLoader(htmlText);
-
-                    // Safe External Script Stripping
-                    htmlText = htmlText.replace(/<script[^>]*src=["'](http[^"']+)["'][^>]*>.*?<\/script>/gi, (match, url) => {
-                        if (url.includes('exitapi.js') || url.includes('fonts.googleapis.com')) return match;
-                        return '';
-                    });
-                    htmlText = htmlText.replace(/<link[^>]*href=["'](http[^"']+)["'][^>]*>/gi, (match, url) => {
-                        if (url.includes('fonts.googleapis.com')) return match;
-                        return '';
-                    });
-
-                    log("Injected Google Ads ExitApi and MRAID Polyfill securely.");
-                }
-
-                // Add index.html to final ZIP
                 finalZip.file('index.html', htmlText);
 
                 const contentUint8 = await finalZip.generateAsync({
@@ -639,7 +372,6 @@ ${sEnd}
                 const content = new Blob([contentUint8], { type: 'application/zip' });
                 const zipUrl = URL.createObjectURL(content);
 
-                // Setup Preview Iframe using a Blob URL of the generated HTML
                 const previewBlob = new Blob([htmlText], { type: 'text/html' });
                 const previewUrl = URL.createObjectURL(previewBlob);
                 document.getElementById('preview-frame').src = previewUrl;

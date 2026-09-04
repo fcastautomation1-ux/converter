@@ -17,14 +17,14 @@
         <div class="flex-1">
             <header class="mb-8">
                 <h1 class="text-3xl font-bold text-slate-800">Playable Ad Converter</h1>
-                <p class="text-slate-500 mt-2 text-sm">Drag & Drop supported. Universal Adapter injected. Fixes 4th-Party Calls, Secure URLs & Click-Hijacking.</p>
+                <p class="text-slate-500 mt-2 text-sm">Google Ads Compliant. Strips 4th-Party Calls & Studio Enabler to fix Validator Errors.</p>
             </header>
 
             <!-- App Link Input -->
             <div class="mb-6">
                 <label class="block text-sm font-bold text-slate-700 mb-2">Redirect App Link (Final URL) <span class="text-red-500">*</span></label>
                 <input type="url" id="app-link" placeholder="https://play.google.com/store/apps/details?id=com.your.game" class="w-full border-2 border-slate-300 rounded-xl p-3 focus:border-indigo-500 focus:outline-none transition">
-                <p class="text-xs text-slate-400 mt-1">This URL will be injected as the Google Ads clickTag / Enabler Exit target.</p>
+                <p class="text-xs text-slate-400 mt-1">This URL will be injected as the Google Ads clickTag.</p>
             </div>
 
             <!-- Main Upload Box -->
@@ -78,7 +78,7 @@
             </div>
 
             <div class="mt-6 p-4 rounded-xl bg-emerald-50 text-emerald-700 font-medium text-center border border-emerald-200">
-                <span class="block text-sm">Status: <strong>PASS</strong> | Universal Enabler: <strong>Injected</strong></span>
+                <span class="block text-sm">Status: <strong>PASS</strong> | Studio & 4th-Party Calls: <strong>Cleaned</strong></span>
                 <span class="block text-xs mt-1 text-emerald-600">Final Size: <span id="package-size">0 KB</span></span>
             </div>
 
@@ -119,7 +119,6 @@
                 dropZone.addEventListener(evt, () => dropZone.classList.remove('drop-active'));
             });
 
-            // FIXED: Explicitly handle the drop event for drag-and-drop functionality
             dropZone.addEventListener('drop', (e) => {
                 if (e.dataTransfer.files.length) {
                     const file = e.dataTransfer.files[0];
@@ -131,7 +130,6 @@
                 }
             });
 
-            // Handle manual click-to-upload
             fileInput.addEventListener('change', (e) => {
                 if (e.target.files.length) {
                     const file = e.target.files[0];
@@ -268,23 +266,30 @@ ${sEnd}`;
             }
         }
 
-        // UNIVERSAL EXIT, VALIDATOR FIXES & COMPLIANCE INJECTION ROUTINE
+        // GOOGLE ADS COMPLIANT EXIT & VALIDATOR CLEANER ROUTINE
         function convertApplovinExit(html, appLink) {
-            log("Applying Validator Fixes: Converting HTTP to HTTPS & Stripping 4th Party SDK Calls...");
+            log("Applying Validator Rules: Upgrading URLs to HTTPS & Stripping 4th Party / Studio Calls...");
             
-            // 1. FIX: Secure URL check (Convert http:// to https:// to pass Google Ads validation)
+            // 1. Force secure HTTPS on links to pass Secure URL check
             html = html.replace(/(['"])http:\/\//g, '$1https://');
 
-            // 2. FIX: 4th Party calls check (Aggressively strip network SDKs and tracking pixels)
-            const blocklist = ['mraid.js', 'applovin', 'unity', 'pingle', 'vungle', 'ironsource', 'mintegral', 'chartboost', 'facebook.com', 'google-analytics'];
-            blocklist.forEach(keyword => {
-                const regex = new RegExp(`<script[^>]*src=["'][^"']*${keyword}[^"']*["'][^>]*>[\\s\\S]*?<\\/script>`, 'gi');
-                html = html.replace(regex, '');
+            // 2. Strip unauthorized external script tags to pass 4th Party Calls & Studio checks
+            html = html.replace(/<script[^>]+src=["'](https?:\/\/[^"']+)["'][^>]*>[\s\S]*?<\/script>/gi, (match, src) => {
+                if (src.includes('googlesyndication.com') || src.includes('exitapi.js')) {
+                    return match;
+                }
+                log(`Stripped unauthorized external script: ${src}`);
+                return '';
             });
-            // Catch inline document.write injected scripts
-            html = html.replace(/document\.write\(['"]<script[^>]*src=['"][^'"]*mraid\.js['"][^>]*><\/script>['"]\);?/gi, '');
+            html = html.replace(/<script[^>]+src=["'](https?:\/\/[^"']+)["'][^>]*\/\s*>/gi, (match, src) => {
+                if (src.includes('googlesyndication.com') || src.includes('exitapi.js')) {
+                    return match;
+                }
+                log(`Stripped unauthorized external script: ${src}`);
+                return '';
+            });
 
-            // 3. Convert raw API exit calls to universal bridge
+            // 3. Convert network SDK exit triggers
             html = html.replace(/mraid\.open\(/g, "exitAd(");
             html = html.replace(/super_open\(/g, "exitAd(");
             html = html.replace(/dapi\.openStoreUrl\(/g, "exitAd(");
@@ -294,7 +299,6 @@ ${sEnd}`;
             const exitScript = `
 <meta name="ad.size" content="width=320,height=480">
 <script type="text/javascript" src="https://tpc.googlesyndication.com/pagead/gadgets/html5/api/exitapi.js">${sEnd}
-<script type="text/javascript" src="https://s0.2mdn.net/ads/studio/Enabler.js">${sEnd}
 <script>
 var clickTag = "${appLink}";
 
@@ -302,18 +306,12 @@ function exitAd(url){
     var target = url || clickTag;
     if (typeof ExitApi !== 'undefined' && ExitApi.exit) {
         ExitApi.exit();
-    } else if (typeof Enabler !== 'undefined' && Enabler.isInitialized()) {
-        Enabler.exit('Universal_Exit', target);
-    } else if (typeof Enabler !== 'undefined') {
-        Enabler.addEventListener(studio.events.StudioEvent.INIT, function () {
-            Enabler.exit('Universal_Exit', target);
-        });
-    } else {
+    } else if(target) {
         window.open(target, "_blank");
     }
 }
 
-// MRAID 2.0 API BRIDGE
+// MRAID 2.0 API MOCK BRIDGE
 window.mraid = window.mraid || {
     listeners: {},
     addEventListener: function (event, handler) {
@@ -356,24 +354,12 @@ window.dapi = window.dapi || {
     openStoreUrl: function(url) { exitAd(url); }
 };
 
-// APPLOVIN & UNITY SDK BRIDGES
 window.AppLovin = window.AppLovin || { handleClick: function(u) { exitAd(u); } };
 window.Unity = window.Unity || { openUrl: function(u) { exitAd(u); } };
-
-// DOM EVENT BUBBLING & CLICK-HIJACK ISOLATION
-document.addEventListener('DOMContentLoaded', function() {
-    var controlSelectors = '.control, .ui-btn, .sound-toggle, .carousel-arrow, video, audio, [class*="sound"], [class*="close"]';
-    document.querySelectorAll(controlSelectors).forEach(function(el) {
-        el.addEventListener('click', function(e) {
-            e.stopPropagation();
-        }, { capture: true });
-    });
-});
 
 var originalWindowOpen = window.open;
 window.open = function(url, target, features) { exitAd(url); };
 
-// FIXED: Removed '#canvas, canvas' from closest() to allow game interactivity without triggering exits
 document.addEventListener('click', function(e) {
     var target = e.target.closest('a, button, .cta, .button, [id*="cta"], [class*="cta"], [id*="play"], [class*="play"]');
     if (target || (e.clientX > window.innerWidth - 150 && e.clientY > window.innerHeight - 80)) {
@@ -381,10 +367,6 @@ document.addEventListener('click', function(e) {
     }
 }, { capture: true, passive: true });
 ${sEnd}
-<style>
-  .cta-layer, #cta, .exit-bg { z-index: 1 !important; }
-  .ui-btn, .sound-toggle, .carousel-arrow, .control, video, audio { z-index: 9999 !important; position: relative; }
-</style>
 `;
             if (html.includes("<head>")) {
                 html = html.replace("<head>", "<head>" + exitScript);
@@ -483,7 +465,7 @@ ${sEnd}
                             let externalJsUrls = [];
                             
                             while ((match = scriptRegex.exec(htmlText)) !== null) {
-                                if (!match[1].includes('exitapi.js') && !match[1].includes('dapi.js') && !match[1].includes('Enabler.js')) {
+                                if (!match[1].includes('exitapi.js') && !match[1].includes('dapi.js')) {
                                     externalJsUrls.push(match[1]);
                                 }
                             }
@@ -518,7 +500,7 @@ ${sEnd}
                     const cocosPatched = await extractCocosPayload(htmlText);
                     if (cocosPatched) htmlText = cocosPatched;
 
-                    log("Applying Universal Exit Bridges, Enabler SDK & Click Isolation...");
+                    log("Applying Google Ads ExitApi, MRAID & DAPI polyfills...");
                     htmlText = convertApplovinExit(htmlText, appLink);
                     finalZip.file('index.html', htmlText);
                 }

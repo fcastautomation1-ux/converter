@@ -17,7 +17,7 @@
         <div class="flex-1">
             <header class="mb-8">
                 <h1 class="text-3xl font-bold text-slate-800">Playable Ad Converter</h1>
-                <p class="text-slate-500 mt-2 text-sm">Drag & Drop supported. Auto-Fetches JS. Cocos Engine, MRAID 2.0 & DAPI Polyfills.</p>
+                <p class="text-slate-500 mt-2 text-sm">Drag & Drop supported. Auto-Fetches JS. Cocos Engine Base64 Unpacker, MRAID 2.0 & DAPI Polyfills.</p>
             </header>
 
             <!-- App Link Input -->
@@ -34,7 +34,7 @@
                     <input type="file" id="file-html" accept=".html,.zip,.txt" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
                     <div id="label-html" class="pointer-events-none">
                         <p class="text-slate-600 font-medium">Drag & drop your .html or .zip file here</p>
-                        <p class="text-xs text-slate-400 mt-2">External JS payloads & ZIP assets are auto-processed.</p>
+                        <p class="text-xs text-slate-400 mt-2">External JS payloads, Cocos Base64 & ZIP archives are auto-processed.</p>
                     </div>
                     <div id="info-html" class="hidden text-indigo-600 font-semibold pointer-events-none"></div>
                 </div>
@@ -195,6 +195,7 @@
             return bytes;
         }
 
+        // AppLovin Payload Extractor
         function extractAppLovinPayload(jsContent) {
             const match = jsContent.match(/al_renderHtml\s*\(\s*(\{[\s\S]+\}|["'][\s\S]+["'])\s*\)/);
             if (match && match[1]) {
@@ -211,6 +212,60 @@
             return null;
         }
 
+        // Cocos Engine Base64 Unpacker Routine
+        async function extractCocosPayload(htmlText) {
+            const zipMatch = htmlText.match(/(?:window\.__zip\s*=\s*|var\s+__zip\s*=\s*)(["'][\s\S]+?["']|\[[\s\S]+?\]);/);
+            if (!zipMatch) return null;
+
+            log("Detected Cocos Engine base64 __zip archive inside HTML. Unpacking assets...");
+            let base64Data = "";
+            try {
+                let rawZip = eval('(' + zipMatch[1] + ')');
+                base64Data = Array.isArray(rawZip) ? rawZip.join('') : rawZip;
+            } catch (e) {
+                log("Failed to parse embedded __zip string format.");
+                return null;
+            }
+
+            try {
+                const zipBytes = base64ToUint8Array(base64Data);
+                const zip = await JSZip.loadAsync(zipBytes);
+                
+                let resMap = {};
+                const assetPromises = [];
+
+                zip.forEach((relativePath, file) => {
+                    if (!file.dir && !relativePath.includes('__MACOSX') && !relativePath.startsWith('.')) {
+                        assetPromises.push(
+                            file.async('base64').then(b64 => {
+                                const mime = getMimeType(relativePath);
+                                resMap[relativePath] = `data:${mime};base64,${b64}`;
+                            })
+                        );
+                    }
+                });
+
+                await Promise.all(assetPromises);
+
+                log(`Successfully unpacked ${Object.keys(resMap).length} Cocos assets from base64 __zip array.`);
+
+                const superEvalPatch = `
+<script>
+window.__res = ${JSON.stringify(resMap)};
+window.super_eval = window.super_eval || function(path) {
+    if (window.__res[path]) return window.__res[path];
+    return path;
+};
+${sEnd}`;
+
+                return htmlText.replace("</head>", superEvalPatch + "</head>");
+            } catch (err) {
+                log(`Error extracting Cocos Base64 payload: ${err.message}`);
+                return null;
+            }
+        }
+
+        // Universal Exit & Polyfill Injection Routine
         function convertApplovinExit(html, appLink) {
             html = html.replace(/mraid\.open\(/g, "exitAd(");
             html = html.replace(/super_open\(/g, "exitAd(");
@@ -293,6 +348,7 @@ ${sEnd}
             return html;
         }
 
+        // Multi-File ZIP Archive Processor Routine
         async function processZipArchive(zipBuffer, appLink) {
             log("Reading ZIP archive entries...");
             const zip = await JSZip.loadAsync(zipBuffer);
@@ -346,6 +402,7 @@ ${sEnd}
             return finalZip;
         }
 
+        // Main Converter Execution Flow
         document.getElementById('convert-btn').addEventListener('click', async () => {
             if (!uploadedFile) {
                 alert("Please upload an ad file first!");
@@ -420,6 +477,10 @@ ${sEnd}
                     }
 
                     if (payload) htmlText = payload;
+
+                    // Check for Cocos Engine embedded base64 zip array payload
+                    const cocosPatched = await extractCocosPayload(htmlText);
+                    if (cocosPatched) htmlText = cocosPatched;
 
                     log("Applying Google Ads ExitApi, MRAID, and DAPI polyfills...");
                     htmlText = convertApplovinExit(htmlText, appLink);

@@ -278,14 +278,24 @@ ${sEnd}`;
             // 1. Force secure HTTPS on links
             html = html.replace(/(['"])http:\/\//g, '$1https://');
 
-            // 2. Safely strip ANY existing/conflicting ad.size or ad.orientation meta tags
+            // 2. Safely strip ANY existing/conflicting ad.size, ad.orientation meta tags, and original title
             html = html.replace(/<meta[^>]*name\s*=\s*["']?ad\.size["']?[^>]*>/gi, '');
             html = html.replace(/<meta[^>]*name\s*=\s*["']?ad\.orientation["']?[^>]*>/gi, '');
+            html = html.replace(/<title[^>]*>[\s\S]*?<\/title>/gi, '');
+            html = html.replace(/<title[^>]*\/>/gi, '');
+            html = html.replace(/document\.title\s*=\s*['"][^'"]*['"]/gi, 'document.title = "Playable Ads"');
 
             // 3. DEEP TEXT PURGE: Erase any occurrence of adnxs.com or mraid.js strings anywhere in the code
             html = html.replace(/['"][^'"]*adnxs\.com[^'"]*['"]/gi, '""');
             html = html.replace(/https?:\/\/[^"'\s]*adnxs\.com[^"'\s]*/gi, '');
             html = html.replace(/https?:\/\/[^"'\s]*mraid\.js[^"'\s]*/gi, '');
+
+            // 3.1 DEEP TEXT PURGE: Erase original iOS App Store and Google Play Store app links
+            log("Erasing original iOS App Store & Google Play Store links...");
+            html = html.replace(/href\s*=\s*['"][^'"]*(?:play\.google\.com|market\.android\.com|apps\.apple\.com|itunes\.apple\.com|itms-apps:|itms:|itms-services:|market:)[^'"]*['"]/gi, 'href="javascript:void(0)"');
+            html = html.replace(/[`'"][^`'"]*(?:play\.google\.com|market\.android\.com|apps\.apple\.com|itunes\.apple\.com|itms-apps:|itms:|itms-services:|market:)[^`'"]*[`'"]/gi, '""');
+            html = html.replace(/https?:\/\/[^"'\s]*(?:play\.google\.com|market\.android\.com|apps\.apple\.com|itunes\.apple\.com)[^"'\s]*/gi, '');
+            html = html.replace(/(?:market|itms-apps|itms|itms-services):[^\s"'<>]*/gi, '');
 
             // 4. Aggressively strip ANY unauthorized external script tags
             html = html.replace(/<script[^>]+src=["'](https?:\/\/[^"']+)["'][^>]*>[\s\S]*?<\/script>/gi, (match, src) => {
@@ -317,7 +327,9 @@ ${sEnd}`;
             html = html.replace(/AppLovin\.handleClick\(/g, "exitAd(");
             html = html.replace(/Unity\.openUrl\(/g, "exitAd(");
 
+            log("Hardcoding ad title to: Playable Ads");
             const exitScript = `
+<title>Playable Ads</title>
 <meta name="ad.size" content="width=320,height=480">
 <script type="text/javascript" src="https://tpc.googlesyndication.com/pagead/gadgets/html5/api/exitapi.js">${sEnd}
 <script>

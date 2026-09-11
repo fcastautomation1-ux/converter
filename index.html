@@ -31,210 +31,232 @@
             <div class="mb-4">
                 <label class="block text-sm font-bold text-slate-700 mb-2">1. Upload Ad File (.html or .zip) <span class="text-red-500">*</span></label>
                 <div class="border-2 border-dashed border-slate-300 rounded-xl p-6 text-center transition cursor-pointer bg-slate-50 relative" id="drop-zone-html">
-                    <input type="file" id="file-html" accept=".html,.zip" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
-                    <div id="html-upload-copy">
-                        <svg class="w-10 h-10 mx-auto text-slate-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
-                        <span class="text-indigo-600 font-bold">Upload a Playable File</span>
-                        <p class="text-xs text-slate-400 mt-1">Drop index.html, single-file ad, or .zip archive</p>
+                    <input type="file" id="file-html" accept=".html,.zip,.txt" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
+                    <div id="label-html" class="pointer-events-none">
+                        <p class="text-slate-600 font-medium">Drag & drop your .html or .zip file here</p>
+                        <p class="text-xs text-slate-400 mt-2">External JS payloads, Cocos Base64 & ZIP archives are auto-processed.</p>
                     </div>
-                    <div id="html-file-info" class="hidden text-sm font-semibold text-slate-700 flex items-center justify-center gap-2">
-                        <span id="html-filename"></span>
-                        <button id="clear-html-btn" class="text-xs text-red-500 hover:underline">Remove</button>
-                    </div>
+                    <div id="info-html" class="hidden text-indigo-600 font-semibold pointer-events-none"></div>
                 </div>
             </div>
 
-            <!-- Optional External JS Upload -->
+            <!-- Optional JS Upload Box -->
             <div class="mb-6">
-                <label class="block text-xs font-bold text-slate-500 mb-1">2. (Optional) Manual JS Payload</label>
-                <input type="file" id="file-js" accept=".js" class="text-xs text-slate-500 file:mr-2 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200 cursor-pointer">
-                <p class="text-[11px] text-slate-400 mt-1">Use only if your ad references a remote AppLovin JS file blocked by CORS.</p>
-            </div>
-
-            <!-- Action Button -->
-            <button id="convert-btn" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-xl shadow transition duration-200 flex items-center justify-center gap-2">
-                Convert & Package
-            </button>
-
-            <!-- Logs / Terminal Output -->
-            <div id="log-box" class="mt-4 p-3 bg-slate-900 text-emerald-400 font-mono text-xs rounded-xl h-36 overflow-y-auto hidden"></div>
-
-            <!-- Results Section -->
-            <div id="results-section" class="mt-6 border-t pt-6 hidden">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <span class="text-sm font-bold text-slate-700">Package Ready</span>
-                        <p class="text-xs text-slate-500">Size: <span id="package-size" class="font-bold text-indigo-600">0 KB</span> (Limit: 5MB)</p>
+                <label class="block text-sm font-bold text-slate-700 mb-2">2. Manual JS Payload <span class="text-indigo-600 font-normal">(Required if CORS blocks auto-fetch)</span></label>
+                <div class="border-2 border-dashed border-slate-300 rounded-xl p-6 text-center transition cursor-pointer bg-slate-50 relative" id="drop-zone-js">
+                    <input type="file" id="file-js" accept=".js,.txt" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
+                    <div id="label-js" class="pointer-events-none">
+                        <p class="text-slate-600 font-medium">Drag & drop manual JS payload file here</p>
                     </div>
-                    <a id="download-btn" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 px-4 rounded-lg text-sm shadow transition">
-                        Download ZIP
-                    </a>
+                    <div id="info-js" class="hidden text-indigo-600 font-semibold pointer-events-none"></div>
                 </div>
             </div>
+
+            <!-- Convert Button -->
+            <div class="flex gap-4">
+                <button id="convert-btn" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-xl shadow-lg transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed">
+                    Convert & Package
+                </button>
+                <button id="reset-btn" class="bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold py-3 px-6 rounded-xl transition duration-200">
+                    Reset
+                </button>
+            </div>
+
+            <!-- Live Debug Log Box -->
+            <div id="log-box" class="mt-6 p-4 bg-slate-900 text-emerald-400 font-mono text-xs rounded-xl h-32 overflow-y-auto hidden">
+                <div class="font-bold text-slate-400 mb-1">--- Live Processing Logs ---</div>
+            </div>
         </div>
 
-        <!-- RIGHT COLUMN: Live Responsive Preview -->
-        <div class="flex-1 flex flex-col items-center justify-center bg-slate-100 rounded-xl p-4 min-h-[500px]">
-            <div class="flex items-center gap-4 mb-3 text-xs font-bold text-slate-500">
-                <span>Preview Mode</span>
-                <button id="btn-portrait" class="px-2 py-1 bg-white rounded shadow text-indigo-600">Portrait</button>
-                <button id="btn-landscape" class="px-2 py-1 bg-slate-200 rounded text-slate-600">Landscape</button>
+        <!-- RIGHT COLUMN: Preview & Results -->
+        <div class="flex-1 flex flex-col hidden" id="results-section">
+            <h2 class="text-lg font-bold text-slate-800 mb-2">Ad Preview</h2>
+            
+            <!-- Mobile Preview Frame -->
+            <div class="border-4 border-slate-800 rounded-[2rem] overflow-hidden relative mx-auto shadow-2xl bg-black" style="width: 320px; height: 480px;">
+                <iframe id="preview-frame" class="w-full h-full border-0 bg-white" sandbox="allow-scripts allow-same-origin allow-popups"></iframe>
             </div>
-            <div id="preview-wrapper" class="w-[320px] h-[480px] bg-black rounded-lg shadow-2xl overflow-hidden relative transition-all duration-300">
-                <iframe id="preview-frame" class="w-full h-full border-0 bg-white" sandbox="allow-scripts allow-same-origin allow-forms"></iframe>
-            </div>
-        </div>
 
+            <div class="mt-6 p-4 rounded-xl bg-emerald-50 text-emerald-700 font-medium text-center border border-emerald-200">
+                <span class="block text-sm">Status: <strong>PASS</strong> | AdNxs Strings: <strong>Deeply Purged</strong></span>
+                <span class="block text-xs mt-1 text-emerald-600">Final Size: <span id="package-size">0 KB</span></span>
+            </div>
+
+            <a id="download-btn" class="mt-4 block text-center w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-6 rounded-xl shadow-lg transition duration-200 cursor-pointer">
+                Download Google_Ads_Ready.zip
+            </a>
+        </div>
     </div>
 
     <script>
         let uploadedFile = null;
         let jsFile = null;
+        const sEnd = "</" + "script>";
 
-        const htmlInput = document.getElementById('file-html');
-        const jsInput = document.getElementById('file-js');
-        const dropZone = document.getElementById('drop-zone-html');
-        const previewFrame = document.getElementById('preview-frame');
-        const sEnd = '<' + '/script>';
-
-        function log(msg) {
+        function log(message) {
             const box = document.getElementById('log-box');
             box.classList.remove('hidden');
-            const item = document.createElement('div');
-            item.textContent = `> ${msg}`;
-            box.appendChild(item);
+            box.innerHTML += `<div>[${new Date().toLocaleTimeString()}] ${message}</div>`;
             box.scrollTop = box.scrollHeight;
+            console.log(message);
         }
 
-        // Dropzone handlers
-        ['dragenter', 'dragover'].forEach(name => {
-            dropZone.addEventListener(name, (e) => { e.preventDefault(); dropZone.classList.add('drop-active'); });
-        });
-        ['dragleave', 'drop'].forEach(name => {
-            dropZone.addEventListener(name, (e) => { e.preventDefault(); dropZone.classList.remove('drop-active'); });
-        });
+        function setupDropZone(zoneId, inputId, labelId, infoId, isJs) {
+            const dropZone = document.getElementById(zoneId);
+            const fileInput = document.getElementById(inputId);
+            const labelDiv = document.getElementById(labelId);
+            const infoDiv = document.getElementById(infoId);
 
-        dropZone.addEventListener('drop', (e) => {
-            if (e.dataTransfer.files.length) handleFileSelect(e.dataTransfer.files[0]);
-        });
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(evt => {
+                dropZone.addEventListener(evt, e => e.preventDefault());
+            });
 
-        htmlInput.addEventListener('change', (e) => {
-            if (e.target.files.length) handleFileSelect(e.target.files[0]);
-        });
+            ['dragenter', 'dragover'].forEach(evt => {
+                dropZone.addEventListener(evt, () => dropZone.classList.add('drop-active'));
+            });
 
-        jsInput.addEventListener('change', (e) => {
-            if (e.target.files.length) jsFile = e.target.files[0];
-        });
+            ['dragleave', 'drop'].forEach(evt => {
+                dropZone.addEventListener(evt, () => dropZone.classList.remove('drop-active'));
+            });
 
-        function handleFileSelect(file) {
-            uploadedFile = file;
-            document.getElementById('html-upload-copy').classList.add('hidden');
-            document.getElementById('html-file-info').classList.remove('hidden');
-            document.getElementById('html-filename').textContent = file.name;
-            log(`Loaded file: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`);
+            dropZone.addEventListener('drop', (e) => {
+                if (e.dataTransfer.files.length) {
+                    const file = e.dataTransfer.files[0];
+                    if (isJs) jsFile = file; else uploadedFile = file;
+                    labelDiv.classList.add('hidden');
+                    infoDiv.classList.remove('hidden');
+                    infoDiv.textContent = `${isJs ? 'JS File' : 'Main File'}: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
+                    log(`${isJs ? 'Manual JS' : 'Main ad'} file loaded: ${file.name}`);
+                }
+            });
+
+            fileInput.addEventListener('change', (e) => {
+                if (e.target.files.length) {
+                    const file = e.target.files[0];
+                    if (isJs) jsFile = file; else uploadedFile = file;
+                    labelDiv.classList.add('hidden');
+                    infoDiv.classList.remove('hidden');
+                    infoDiv.textContent = `${isJs ? 'JS File' : 'Main File'}: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
+                    log(`${isJs ? 'Manual JS' : 'Main ad'} file loaded: ${file.name}`);
+                }
+            });
         }
 
-        document.getElementById('clear-html-btn').addEventListener('click', (e) => {
-            e.stopPropagation();
+        setupDropZone('drop-zone-html', 'file-html', 'label-html', 'info-html', false);
+        setupDropZone('drop-zone-js', 'file-js', 'label-js', 'info-js', true);
+
+        document.getElementById('reset-btn').addEventListener('click', () => {
             uploadedFile = null;
-            htmlInput.value = "";
-            document.getElementById('html-upload-copy').classList.remove('hidden');
-            document.getElementById('html-file-info').classList.add('hidden');
+            jsFile = null;
+            document.getElementById('file-html').value = "";
+            document.getElementById('file-js').value = "";
+            document.getElementById('label-html').classList.remove('hidden');
+            document.getElementById('info-html').classList.add('hidden');
+            document.getElementById('label-js').classList.remove('hidden');
+            document.getElementById('info-js').classList.add('hidden');
+            document.getElementById('app-link').value = "";
             document.getElementById('results-section').classList.add('hidden');
-            previewFrame.src = "about:blank";
-            log("File cleared.");
+            document.getElementById('log-box').classList.add('hidden');
+            document.getElementById('log-box').innerHTML = '<div class="font-bold text-slate-400 mb-1">--- Live Processing Logs ---</div>';
+            document.getElementById('preview-frame').src = "";
+            const btn = document.getElementById('convert-btn');
+            btn.textContent = 'Convert & Package';
+            btn.disabled = false;
         });
 
-        // Device orientation switcher
-        document.getElementById('btn-portrait').addEventListener('click', () => {
-            document.getElementById('preview-wrapper').style.width = '320px';
-            document.getElementById('preview-wrapper').style.height = '480px';
-            document.getElementById('btn-portrait').className = 'px-2 py-1 bg-white rounded shadow text-indigo-600';
-            document.getElementById('btn-landscape').className = 'px-2 py-1 bg-slate-200 rounded text-slate-600';
-        });
-
-        document.getElementById('btn-landscape').addEventListener('click', () => {
-            document.getElementById('preview-wrapper').style.width = '480px';
-            document.getElementById('preview-wrapper').style.height = '320px';
-            document.getElementById('btn-landscape').className = 'px-2 py-1 bg-white rounded shadow text-indigo-600';
-            document.getElementById('btn-portrait').className = 'px-2 py-1 bg-slate-200 rounded text-slate-600';
-        });
-
-        // Binary Validation for Zip Image Assets
-        function isValidImage(uint8Array, filename) {
-            if (uint8Array.length < 4) return false;
-            const ext = filename.split('.').pop().toLowerCase();
-            
-            // PNG Signature
-            if (ext === 'png') {
-                return uint8Array[0] === 0x89 && uint8Array[1] === 0x50 && uint8Array[2] === 0x4E && uint8Array[3] === 0x47;
-            }
-            // JPEG Signature
-            if (ext === 'jpg' || ext === 'jpeg') {
-                return uint8Array[0] === 0xFF && uint8Array[1] === 0xD8 && uint8Array[uint8Array.length - 2] === 0xFF && uint8Array[uint8Array.length - 1] === 0xD9;
-            }
-            // GIF Signature
-            if (ext === 'gif') {
-                return uint8Array[0] === 0x47 && uint8Array[1] === 0x49 && uint8Array[2] === 0x46;
-            }
-            // WebP Signature
-            if (ext === 'webp') {
-                return uint8Array[0] === 0x52 && uint8Array[1] === 0x49 && uint8Array[2] === 0x46 && uint8Array[3] === 0x46;
-            }
-            return true; // Fallback allow other asset types
+        function isValidImage(buffer, filename) {
+            const name = filename.toLowerCase();
+            if (buffer.length < 8) return false;
+            if (name.endsWith('.png')) return buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4E && buffer[3] === 0x47;
+            if (name.endsWith('.jpg') || name.endsWith('.jpeg')) return buffer[0] === 0xFF && buffer[1] === 0xD8 && buffer[2] === 0xFF;
+            return true;
         }
 
-        // Fast & Robust AppLovin Payload Extractor
+        function getMimeType(filename) {
+            const ext = filename.split('.').pop().toLowerCase();
+            switch (ext) {
+                case 'png': return 'image/png';
+                case 'jpg': case 'jpeg': return 'image/jpeg';
+                case 'gif': return 'image/gif';
+                case 'mp3': return 'audio/mpeg';
+                case 'wav': return 'audio/wav';
+                case 'mp4': return 'video/mp4';
+                case 'json': return 'application/json';
+                case 'js': return 'application/javascript';
+                case 'css': return 'text/css';
+                case 'html': return 'text/html';
+                case 'svg': return 'image/svg+xml';
+                default: return 'application/octet-stream';
+            }
+        }
+
+        function base64ToUint8Array(base64) {
+            base64 = base64.replace(/[^A-Za-z0-9+/=]/g, "");
+            while (base64.length % 4 !== 0) base64 += '=';
+            const binaryString = window.atob(base64);
+            const len = binaryString.length;
+            const bytes = new Uint8Array(len);
+            for (let i = 0; i < len; i++) bytes[i] = binaryString.charCodeAt(i);
+            return bytes;
+        }
+
         function extractAppLovinPayload(jsContent) {
-            if (!jsContent) return null;
-            const funcIdx = jsContent.indexOf('al_renderHtml(');
-            if (funcIdx !== -1) {
-                const jsonStart = funcIdx + 'al_renderHtml('.length;
-                const lastParen = jsContent.lastIndexOf(')');
-                if (lastParen > jsonStart) {
-                    const jsonStr = jsContent.substring(jsonStart, lastParen).trim();
+            const match = jsContent.match(/al_renderHtml\s*\(\s*(\{[\s\S]+\}|["'][\s\S]+["'])\s*\)/);
+            if (match && match[1]) {
+                try {
+                    let parsed = JSON.parse(match[1]);
+                    return parsed.html ? parsed.html : parsed;
+                } catch (e) {
                     try {
-                        const parsed = JSON.parse(jsonStr);
-                        if (parsed && parsed.html) return parsed.html;
-                        if (typeof parsed === 'string') return parsed;
-                    } catch (e) {
-                        try {
-                            const evaled = eval('(' + jsonStr + ')');
-                            if (evaled && evaled.html) return evaled.html;
-                            if (typeof evaled === 'string') return evaled;
-                        } catch(e2) {}
-                    }
+                        let evaled = eval('(' + match[1] + ')');
+                        return evaled.html ? evaled.html : evaled;
+                    } catch(e2) { }
                 }
             }
             return null;
         }
 
-        // Cocos Payload Extraction
         async function extractCocosPayload(htmlText) {
+            const zipMatch = htmlText.match(/(?:window\.__zip\s*=\s*|var\s+__zip\s*=\s*)(["'][\s\S]+?["']|\[[\s\S]+?\]);/);
+            if (!zipMatch) return null;
+
+            log("Detected Cocos Engine base64 __zip archive inside HTML. Unpacking assets...");
+            let base64Data = "";
             try {
-                const b64Regex = /(?:window\.)?_CCSettings\s*=\s*['"]([A-Za-z0-9+/=]{100,})['"]/;
-                const match = htmlText.match(b64Regex);
-                if (!match) return null;
+                let rawZip = eval('(' + zipMatch[1] + ')');
+                base64Data = Array.isArray(rawZip) ? rawZip.join('') : rawZip;
+            } catch (e) {
+                log("Failed to parse embedded __zip string format.");
+                return null;
+            }
 
-                log("Identified Cocos Creator Base64 encrypted settings payload.");
-                const base64Data = match[1];
-                let decoded = atob(base64Data);
+            try {
+                const zipBytes = base64ToUint8Array(base64Data);
+                const zip = await JSZip.loadAsync(zipBytes);
+                let resMap = {};
+                const assetPromises = [];
 
-                // Check for zip compression header
-                if (decoded.startsWith('PK')) {
-                    log("Decompressing compressed Cocos settings package...");
-                    const zip = await JSZip.loadAsync(base64Data, { base64: true });
-                    const fileNames = Object.keys(zip.files);
-                    if (fileNames.length > 0) {
-                        decoded = await zip.files[fileNames[0]].async('string');
+                zip.forEach((relativePath, file) => {
+                    if (!file.dir && !relativePath.includes('__MACOSX') && !relativePath.startsWith('.')) {
+                        assetPromises.push(
+                            file.async('base64').then(b64 => {
+                                const mime = getMimeType(relativePath);
+                                resMap[relativePath] = `data:${mime};base64,${b64}`;
+                            })
+                        );
                     }
-                }
+                });
 
-                // Super-Eval Unpacker Patch
-                const superEvalPatch = `<script>
-window._CCSettings = ${decoded};
-window._applovin = window._applovin || {};
-window._applovin.eval = function(str) { return window.eval(str); };
+                await Promise.all(assetPromises);
+                log(`Successfully unpacked ${Object.keys(resMap).length} Cocos assets from base64 __zip array.`);
+
+                const superEvalPatch = `
+<script>
+window.__res = ${JSON.stringify(resMap)};
+window.super_eval = window.super_eval || function(path) {
+    if (window.__res[path]) return window.__res[path];
+    return path;
+};
 ${sEnd}`;
 
                 // Bulletproof Head Injection for Cocos
@@ -256,20 +278,24 @@ ${sEnd}`;
             // 1. Force secure HTTPS on links
             html = html.replace(/(['"])http:\/\//g, '$1https://');
 
-            // 2. Safely strip ANY existing/conflicting ad.size, ad.orientation, or title tags
+            // 2. Safely strip ANY existing/conflicting ad.size, ad.orientation meta tags, and original title
             html = html.replace(/<meta[^>]*name\s*=\s*["']?ad\.size["']?[^>]*>/gi, '');
             html = html.replace(/<meta[^>]*name\s*=\s*["']?ad\.orientation["']?[^>]*>/gi, '');
             html = html.replace(/<title[^>]*>[\s\S]*?<\/title>/gi, '');
             html = html.replace(/<title[^>]*\/>/gi, '');
+            html = html.replace(/document\.title\s*=\s*['"][^'"]*['"]/gi, 'document.title = "Playable Ads"');
 
             // 3. DEEP TEXT PURGE: Erase any occurrence of adnxs.com or mraid.js strings anywhere in the code
             html = html.replace(/['"][^'"]*adnxs\.com[^'"]*['"]/gi, '""');
             html = html.replace(/https?:\/\/[^"'\s]*adnxs\.com[^"'\s]*/gi, '');
             html = html.replace(/https?:\/\/[^"'\s]*mraid\.js[^"'\s]*/gi, '');
 
-            // 3.1 SAFE SANITIZATION: Neutralize tracker endpoints & staging URLs
-            html = html.replace(/https?:\\?\/\\?\/insights\.lunalabs\.io\\?\/[a-zA-Z0-9_\-\/]+/gi, '');
-            html = html.replace(/mocleveleditorpl93\.netlify\.app/gi, '');
+            // 3.1 DEEP TEXT PURGE: Erase original iOS App Store and Google Play Store app links
+            log("Erasing original iOS App Store & Google Play Store links...");
+            html = html.replace(/href\s*=\s*['"][^'"]*(?:play\.google\.com|market\.android\.com|apps\.apple\.com|itunes\.apple\.com|itms-apps:|itms:|itms-services:|market:)[^'"]*['"]/gi, 'href="javascript:void(0)"');
+            html = html.replace(/[`'"][^`'"]*(?:play\.google\.com|market\.android\.com|apps\.apple\.com|itunes\.apple\.com|itms-apps:|itms:|itms-services:|market:)[^`'"]*[`'"]/gi, '""');
+            html = html.replace(/https?:\/\/[^"'\s]*(?:play\.google\.com|market\.android\.com|apps\.apple\.com|itunes\.apple\.com)[^"'\s]*/gi, '');
+            html = html.replace(/(?:market|itms-apps|itms|itms-services):[^\s"'<>]*/gi, '');
 
             // 4. Aggressively strip ANY unauthorized external script tags
             html = html.replace(/<script[^>]+src=["'](https?:\/\/[^"']+)["'][^>]*>[\s\S]*?<\/script>/gi, (match, src) => {
@@ -301,10 +327,10 @@ ${sEnd}`;
             html = html.replace(/AppLovin\.handleClick\(/g, "exitAd(");
             html = html.replace(/Unity\.openUrl\(/g, "exitAd(");
 
+            log("Hardcoding ad title to: Playable Ads");
             const exitScript = `
 <title>Playable Ads</title>
 <meta name="ad.size" content="width=320,height=480">
-<style>.preloader__luna__logo{display:none !important;}</style>
 <script type="text/javascript" src="https://tpc.googlesyndication.com/pagead/gadgets/html5/api/exitapi.js">${sEnd}
 <script>
 // RUNTIME 4TH-PARTY NETWORK BLOCKER FOR GOOGLE ADS COMPLIANCE

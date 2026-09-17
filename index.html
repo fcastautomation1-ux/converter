@@ -82,6 +82,14 @@
                 <span class="block text-xs mt-1 text-emerald-600">Final Size: <span id="package-size">0 KB</span></span>
             </div>
 
+            <!-- Risk Warning Container -->
+            <div id="suspicious-warning" class="mt-4 p-4 rounded-xl bg-red-50 text-red-700 font-medium text-sm border border-red-200 hidden">
+                <span class="block font-bold mb-2">⚠️ Risk Detected!</span>
+                <p class="mb-3">The converted file contains hidden footprints that might expose the original advertiser and trigger a Google Ads ban. Here is the offending code:</p>
+                <ul id="suspicious-list" class="list-disc pl-5 text-xs text-red-600 space-y-3"></ul>
+                <p class="mt-3 text-xs font-bold text-red-800">Please review the HTML manually. Download anyway at your own risk.</p>
+            </div>
+
             <a id="download-btn" class="mt-4 block text-center w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-6 rounded-xl shadow-lg transition duration-200 cursor-pointer">
                 Download Google_Ads_Ready.zip
             </a>
@@ -156,6 +164,7 @@
             document.getElementById('info-js').classList.add('hidden');
             document.getElementById('app-link').value = "";
             document.getElementById('results-section').classList.add('hidden');
+            document.getElementById('suspicious-warning').classList.add('hidden');
             document.getElementById('log-box').classList.add('hidden');
             document.getElementById('log-box').innerHTML = '<div class="font-bold text-slate-400 mb-1">--- Live Processing Logs ---</div>';
             document.getElementById('preview-frame').src = "";
@@ -163,6 +172,54 @@
             btn.textContent = 'Convert & Package';
             btn.disabled = false;
         });
+
+        // EXTRACTS CODE SNIPPET TO SHOW THE USER EXACTLY WHAT TO FIX (With text wrapping)
+        function scanForSuspiciousContent(html) {
+            const warnings = [];
+            const lowerHtml = html.toLowerCase();
+
+            function getSnippet(index, length) {
+                const start = Math.max(0, index - 40);
+                const end = Math.min(html.length, index + length + 40);
+                let snippet = html.substring(start, end);
+                // Escape HTML so it displays safely as code text in the browser
+                snippet = snippet.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                return `...${snippet}...`;
+            }
+
+            // 1. Check for Author/Creator/Developer footprints
+            const authorRegex = /(author|creator|developer|publisher)\s*['":=]\s*['"][^'"]+['"]/i;
+            const authorMatch = html.match(authorRegex);
+            if (authorMatch) {
+                warnings.push(`Found 'author', 'creator', or 'developer' tag:<br><code class="block bg-red-100 p-2 mt-1 rounded text-[11px] font-mono text-red-900 border border-red-200 whitespace-pre-wrap break-all">${getSnippet(authorMatch.index, authorMatch[0].length)}</code>`);
+            }
+
+            // 2. Check for leftover Bundle IDs (com.company.game)
+            const bundleRegex = /['"]com\.(?!google|apple|android)[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+['"]/i;
+            const bundleMatch = html.match(bundleRegex);
+            if (bundleMatch) {
+                warnings.push(`Lingering App Bundle ID detected:<br><code class="block bg-red-100 p-2 mt-1 rounded text-[11px] font-mono text-red-900 border border-red-200 whitespace-pre-wrap break-all">${getSnippet(bundleMatch.index, bundleMatch[0].length)}</code>`);
+            }
+
+            // 3. Check for specific tracker/competitor network links or variables
+            const trackingNetworks = ['vungle', 'mintegral', 'chartboost', 'tiktok', 'liftoff', 'appsflyer', 'adjust', 'branch.io', 'singular'];
+            for (let i = 0; i < trackingNetworks.length; i++) {
+                let n = trackingNetworks[i];
+                let idx = lowerHtml.indexOf(n);
+                if (idx !== -1) {
+                    warnings.push(`Ad Network/Tracker footprint (<strong>${n}</strong>) detected:<br><code class="block bg-red-100 p-2 mt-1 rounded text-[11px] font-mono text-red-900 border border-red-200 whitespace-pre-wrap break-all">${getSnippet(idx, n.length)}</code>`);
+                }
+            }
+
+            // 4. Check for copyright text
+            const copyRegex = /(copyright|©)/i;
+            const copyMatch = html.match(copyRegex);
+            if (copyMatch) {
+                warnings.push(`Copyright symbol or text detected:<br><code class="block bg-red-100 p-2 mt-1 rounded text-[11px] font-mono text-red-900 border border-red-200 whitespace-pre-wrap break-all">${getSnippet(copyMatch.index, copyMatch[0].length)}</code>`);
+            }
+
+            return warnings;
+        }
 
         function isValidImage(buffer, filename) {
             const name = filename.toLowerCase();
@@ -271,33 +328,28 @@ ${sEnd}`;
             }
         }
 
-        // DEEP SCRUBBER & GOOGLE ADS COMPLIANT EXIT ROUTINE
+        // DEEP SCRUBBER & GOOGLE ADS COMPLIANT EXIT ROUTINE (GAMEPLAY SAFE)
         function convertApplovinExit(html, appLink) {
             log("Applying Deep String Purge: Erasing all AdNxs & MRAID text references...");
             
-            // 1. Force secure HTTPS on links
             html = html.replace(/(['"])http:\/\//g, '$1https://');
 
-            // 2. Safely strip ANY existing/conflicting ad.size, ad.orientation meta tags, and original title
             html = html.replace(/<meta[^>]*name\s*=\s*["']?ad\.size["']?[^>]*>/gi, '');
             html = html.replace(/<meta[^>]*name\s*=\s*["']?ad\.orientation["']?[^>]*>/gi, '');
             html = html.replace(/<title[^>]*>[\s\S]*?<\/title>/gi, '');
             html = html.replace(/<title[^>]*\/>/gi, '');
             html = html.replace(/document\.title\s*=\s*['"][^'"]*['"]/gi, 'document.title = "Playable Ads"');
 
-            // 3. DEEP TEXT PURGE: Erase any occurrence of adnxs.com or mraid.js strings anywhere in the code
             html = html.replace(/['"][^'"]*adnxs\.com[^'"]*['"]/gi, '""');
             html = html.replace(/https?:\/\/[^"'\s]*adnxs\.com[^"'\s]*/gi, '');
             html = html.replace(/https?:\/\/[^"'\s]*mraid\.js[^"'\s]*/gi, '');
 
-            // 3.1 DEEP TEXT PURGE: Erase original iOS App Store and Google Play Store app links
             log("Erasing original iOS App Store & Google Play Store links...");
             html = html.replace(/href\s*=\s*['"][^'"]*(?:play\.google\.com|market\.android\.com|apps\.apple\.com|itunes\.apple\.com|itms-apps:|itms:|itms-services:|market:)[^'"]*['"]/gi, 'href="javascript:void(0)"');
             html = html.replace(/[`'"][^`'"]*(?:play\.google\.com|market\.android\.com|apps\.apple\.com|itunes\.apple\.com|itms-apps:|itms:|itms-services:|market:)[^`'"]*[`'"]/gi, '""');
             html = html.replace(/https?:\/\/[^"'\s]*(?:play\.google\.com|market\.android\.com|apps\.apple\.com|itunes\.apple\.com)[^"'\s]*/gi, '');
             html = html.replace(/(?:market|itms-apps|itms|itms-services):[^\s"'<>]*/gi, '');
 
-            // 4. Aggressively strip ANY unauthorized external script tags
             html = html.replace(/<script[^>]+src=["'](https?:\/\/[^"']+)["'][^>]*>[\s\S]*?<\/script>/gi, (match, src) => {
                 if (src.includes('googlesyndication.com') || src.includes('exitapi.js') || src.includes('ajax.googleapis.com')) {
                     return match;
@@ -305,22 +357,13 @@ ${sEnd}`;
                 log(`Stripped unauthorized external script: ${src}`);
                 return '';
             });
-            html = html.replace(/<script[^>]+src=["'](https?:\/\/[^"']+)["'][^>]*\/\s*>/gi, (match, src) => {
-                if (src.includes('googlesyndication.com') || src.includes('exitapi.js') || src.includes('ajax.googleapis.com')) {
-                    return match;
-                }
-                log(`Stripped unauthorized external script: ${src}`);
-                return '';
-            });
 
-            // 5. Strip external stylesheets/links
             html = html.replace(/<link[^>]+rel=["']stylesheet["'][^>]+href=["'](https?:\/\/[^"']+)["'][^>]*>/gi, (match, href) => {
                 if (href.includes('googlesyndication.com') || href.includes('fonts.googleapis.com')) return match;
                 log(`Stripped external stylesheet: ${href}`);
                 return '';
             });
 
-            // 6. Convert network SDK exit triggers
             html = html.replace(/mraid\.open\(/g, "exitAd(");
             html = html.replace(/super_open\(/g, "exitAd(");
             html = html.replace(/dapi\.openStoreUrl\(/g, "exitAd(");
@@ -333,19 +376,35 @@ ${sEnd}`;
 <meta name="ad.size" content="width=320,height=480">
 <script type="text/javascript" src="https://tpc.googlesyndication.com/pagead/gadgets/html5/api/exitapi.js">${sEnd}
 <script>
-// RUNTIME 4TH-PARTY NETWORK BLOCKER FOR GOOGLE ADS COMPLIANCE
+// SAFER RUNTIME NETWORK BLOCKER (Allows internal Blob/Data/Relative URIs for game engines to load ZIP assets)
+var originalFetch = window.fetch;
 window.fetch = function() {
-    return Promise.reject(new Error("Network calls disabled for Google Ads compliance"));
+    var urlStr = '';
+    if (arguments[0] && arguments[0].url) {
+        urlStr = String(arguments[0].url);
+    } else {
+        urlStr = String(arguments[0]);
+    }
+    if (urlStr.startsWith('http://') || urlStr.startsWith('https://')) {
+        return Promise.reject(new Error("External network calls disabled for Google Ads compliance"));
+    }
+    return originalFetch.apply(this, arguments);
 };
+
+var originalXHR = window.XMLHttpRequest;
 window.XMLHttpRequest = function() {
-    return {
-        open: function() {},
-        send: function() {},
-        setRequestHeader: function() {},
-        readyState: 4,
-        status: 200,
-        responseText: "{}"
+    var xhr = new originalXHR();
+    var origOpen = xhr.open;
+    xhr.open = function() {
+        if (arguments.length > 1) {
+            var urlStr = String(arguments[1]);
+            if (urlStr.startsWith('http://') || urlStr.startsWith('https://')) {
+                arguments[1] = 'data:,'; // Neuter the request URL safely
+            }
+        }
+        return origOpen.apply(xhr, arguments);
     };
+    return xhr;
 };
 navigator.sendBeacon = function() { return true; };
 
@@ -408,16 +467,9 @@ window.Unity = window.Unity || { openUrl: function(u) { exitAd(u); } };
 
 var originalWindowOpen = window.open;
 window.open = function(url, target, features) { exitAd(url); };
-
-document.addEventListener('click', function(e) {
-    var target = e.target.closest('a, button, .cta, .button, [id*="cta"], [class*="cta"], [id*="play"], [class*="play"]');
-    if (target || (e.clientX > window.innerWidth - 150 && e.clientY > window.innerHeight - 80)) {
-        exitAd();
-    }
-}, { capture: true, passive: true });
 ${sEnd}
 `;
-            // Bulletproof Injection for Meta/Head elements
+            
             if (/<head[^>]*>/i.test(html)) {
                 html = html.replace(/(<head[^>]*>)/i, "$1\n" + exitScript);
             } else if (/<html[^>]*>/i.test(html)) {
@@ -428,7 +480,6 @@ ${sEnd}
                 html = "<head>\n" + exitScript + "\n</head>\n" + html;
             }
 
-            // Bulletproof Injection for Body/Dummy Image
             const dummyImage = `\n<!-- Dummy lazy-load image to satisfy Google's Recommended Asset Preloading check -->\n<img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" loading="lazy" style="display:none;" aria-hidden="true">\n`;
             if (/<body[^>]*>/i.test(html)) {
                 html = html.replace(/(<body[^>]*>)/i, "$1\n" + dummyImage);
@@ -564,6 +615,20 @@ ${sEnd}
 
                     const cocosPatched = await extractCocosPayload(htmlText);
                     if (cocosPatched) htmlText = cocosPatched;
+
+                    // WARNING CHECK LOGIC (Before it's written to zip)
+                    const warnings = scanForSuspiciousContent(htmlText);
+                    const warningBox = document.getElementById('suspicious-warning');
+                    const warningList = document.getElementById('suspicious-list');
+
+                    if (warnings.length > 0) {
+                        warningList.innerHTML = warnings.map(w => `<li class="mb-3"><span>${w}</span></li>`).join('');
+                        warningBox.classList.remove('hidden');
+                        log(`⚠️ WARNING: ${warnings.length} risks detected in source code.`);
+                    } else {
+                        warningBox.classList.add('hidden');
+                    }
+                    // -------------------------------
 
                     log("Applying Google Ads ExitApi, MRAID & Network Protection...");
                     htmlText = convertApplovinExit(htmlText, appLink);

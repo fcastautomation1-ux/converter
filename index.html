@@ -17,7 +17,7 @@
         <div class="flex-1">
             <header class="mb-8">
                 <h1 class="text-3xl font-bold text-slate-800">Playable Ad Converter</h1>
-                <p class="text-slate-500 mt-2 text-sm">Google Ads Compliant. Bulletproof HTML Injection Enabled.</p>
+                <p class="text-slate-500 mt-2 text-sm">Google Ads Compliant. Bulletproof HTML Injection &amp; Intelligent Asset Compression.</p>
             </header>
 
             <!-- App Link Input -->
@@ -34,7 +34,7 @@
                     <input type="file" id="file-html" accept=".html,.zip,.txt" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
                     <div id="label-html" class="pointer-events-none">
                         <p class="text-slate-600 font-medium">Drag & drop your .html or .zip file here</p>
-                        <p class="text-xs text-slate-400 mt-2">External JS payloads, Cocos Base64 & ZIP archives are auto-processed.</p>
+                        <p class="text-xs text-slate-400 mt-2">External JS payloads, Cocos Base64 &amp; ZIP archives are auto-processed.</p>
                     </div>
                     <div id="info-html" class="hidden text-indigo-600 font-semibold pointer-events-none"></div>
                 </div>
@@ -55,7 +55,7 @@
             <!-- Convert Button -->
             <div class="flex gap-4">
                 <button id="convert-btn" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-xl shadow-lg transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed">
-                    Convert & Package
+                    Convert &amp; Package
                 </button>
                 <button id="reset-btn" class="bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold py-3 px-6 rounded-xl transition duration-200">
                     Reset
@@ -63,7 +63,7 @@
             </div>
 
             <!-- Live Debug Log Box -->
-            <div id="log-box" class="mt-6 p-4 bg-slate-900 text-emerald-400 font-mono text-xs rounded-xl h-32 overflow-y-auto hidden">
+            <div id="log-box" class="mt-6 p-4 bg-slate-900 text-emerald-400 font-mono text-xs rounded-xl h-44 overflow-y-auto hidden">
                 <div class="font-bold text-slate-400 mb-1">--- Live Processing Logs ---</div>
             </div>
         </div>
@@ -77,9 +77,34 @@
                 <iframe id="preview-frame" class="w-full h-full border-0 bg-white" sandbox="allow-scripts allow-same-origin allow-popups"></iframe>
             </div>
 
-            <div class="mt-6 p-4 rounded-xl bg-emerald-50 text-emerald-700 font-medium text-center border border-emerald-200">
-                <span class="block text-sm">Status: <strong>PASS</strong> | AdNxs Strings: <strong>Deeply Purged</strong></span>
-                <span class="block text-xs mt-1 text-emerald-600">Final Size: <span id="package-size">0 KB</span></span>
+            <!-- Status Card -->
+            <div id="status-card" class="mt-6 p-4 rounded-xl bg-emerald-50 text-emerald-700 font-medium text-center border border-emerald-200">
+                <span class="block text-sm" id="status-text">Status: <strong>PASS</strong> | AdNxs Strings: <strong>Deeply Purged</strong></span>
+                <span class="block text-xs mt-1 text-emerald-600" id="size-text">Final Size: <span id="package-size">0 KB</span></span>
+            </div>
+
+            <!-- Oversize Warning Container & Compress Action -->
+            <div id="oversize-warning" class="mt-4 p-4 rounded-xl bg-amber-50 text-amber-900 font-medium text-sm border border-amber-300 hidden">
+                <div class="flex items-center gap-2 font-bold text-amber-800 mb-1">
+                    <span class="text-xl">⚠️</span>
+                    <span>Google Ads 5MB Limit Exceeded!</span>
+                </div>
+                <p class="text-xs text-amber-700 mb-3">
+                    Google Ads strictly rejects HTML5 playable ads larger than <strong>5.0 MB</strong>. Your current ad package is <strong id="oversize-detail" class="text-red-700">0 MB</strong>. Click the button below to compress textures, 3D assets &amp; audio under 5MB.
+                </p>
+                <button id="compress-btn" class="w-full bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white font-bold py-3 px-6 rounded-xl shadow-lg transition duration-200 cursor-pointer flex items-center justify-center gap-2">
+                    <span id="compress-spinner" class="hidden animate-spin">🔄</span>
+                    <span id="compress-btn-text">⚡ Compress Ad to &lt; 5MB &amp; Download</span>
+                </button>
+            </div>
+
+            <!-- Compression Success Banner -->
+            <div id="compress-success-banner" class="mt-4 p-4 rounded-xl bg-emerald-50 text-emerald-800 font-medium text-xs border border-emerald-300 hidden">
+                <div class="flex items-center gap-2 font-bold mb-1">
+                    <span class="text-base">✅</span>
+                    <span id="compress-success-title">Intelligent Compression Completed</span>
+                </div>
+                <p id="compress-success-detail" class="text-emerald-700"></p>
             </div>
 
             <!-- Risk Warning Container -->
@@ -90,9 +115,15 @@
                 <p class="mt-3 text-xs font-bold text-red-800">Please review the HTML manually. Download anyway at your own risk.</p>
             </div>
 
+            <!-- Main Download Button -->
             <a id="download-btn" class="mt-4 block text-center w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-6 rounded-xl shadow-lg transition duration-200 cursor-pointer">
                 Download Google_Ads_Ready.zip
             </a>
+
+            <!-- Optional Compression Button (shown when already < 5MB) -->
+            <button id="compress-optional-btn" class="mt-2 text-center w-full bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold py-2 px-4 rounded-xl transition duration-200 cursor-pointer border border-slate-300 hidden">
+                ⚡ Optimize / Compress Further (Optional)
+            </button>
         </div>
     </div>
 
@@ -100,6 +131,15 @@
         let uploadedFile = null;
         let jsFile = null;
         const sEnd = "</" + "script>";
+
+        // State variables for Compressor
+        const GOOGLE_ADS_MAX_BYTES = 5 * 1024 * 1024; // 5.0 MB
+        const TARGET_SAFE_BYTES = 4.85 * 1024 * 1024; // 4.85 MB target safety margin
+        let currentPackageZip = null;
+        let currentHtmlContent = "";
+        let currentZipBlob = null;
+        let currentZipUrl = null;
+        let isCurrentZipUpload = false;
 
         function log(message) {
             const box = document.getElementById('log-box');
@@ -156,6 +196,10 @@
         document.getElementById('reset-btn').addEventListener('click', () => {
             uploadedFile = null;
             jsFile = null;
+            currentPackageZip = null;
+            currentHtmlContent = "";
+            currentZipBlob = null;
+            currentZipUrl = null;
             document.getElementById('file-html').value = "";
             document.getElementById('file-js').value = "";
             document.getElementById('label-html').classList.remove('hidden');
@@ -165,6 +209,9 @@
             document.getElementById('app-link').value = "";
             document.getElementById('results-section').classList.add('hidden');
             document.getElementById('suspicious-warning').classList.add('hidden');
+            document.getElementById('oversize-warning').classList.add('hidden');
+            document.getElementById('compress-success-banner').classList.add('hidden');
+            document.getElementById('compress-optional-btn').classList.add('hidden');
             document.getElementById('log-box').classList.add('hidden');
             document.getElementById('log-box').innerHTML = '<div class="font-bold text-slate-400 mb-1">--- Live Processing Logs ---</div>';
             document.getElementById('preview-frame').src = "";
@@ -182,7 +229,6 @@
                 const start = Math.max(0, index - 40);
                 const end = Math.min(html.length, index + length + 40);
                 let snippet = html.substring(start, end);
-                // Escape HTML so it displays safely as code text in the browser
                 snippet = snippet.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
                 return `...${snippet}...`;
             }
@@ -234,9 +280,12 @@
             switch (ext) {
                 case 'png': return 'image/png';
                 case 'jpg': case 'jpeg': return 'image/jpeg';
+                case 'webp': return 'image/webp';
                 case 'gif': return 'image/gif';
                 case 'mp3': return 'audio/mpeg';
                 case 'wav': return 'audio/wav';
+                case 'ogg': return 'audio/ogg';
+                case 'm4a': return 'audio/mp4';
                 case 'mp4': return 'video/mp4';
                 case 'json': return 'application/json';
                 case 'js': return 'application/javascript';
@@ -257,6 +306,16 @@
             return bytes;
         }
 
+        function uint8ArrayToBase64(bytes) {
+            let binary = '';
+            const len = bytes.byteLength;
+            const chunkSize = 0x8000;
+            for (let i = 0; i < len; i += chunkSize) {
+                binary += String.fromCharCode.apply(null, bytes.subarray(i, Math.min(i + chunkSize, len)));
+            }
+            return window.btoa(binary);
+        }
+
         function extractAppLovinPayload(jsContent) {
             const match = jsContent.match(/al_renderHtml\s*\(\s*(\{[\s\S]+\}|["'][\s\S]+["'])\s*\)/);
             if (match && match[1]) {
@@ -273,11 +332,20 @@
             return null;
         }
 
+        // SMART COCOS HANDLER (Zero-duplication: preserves native __zip without adding 5MB redundant __res)
         async function extractCocosPayload(htmlText) {
             const zipMatch = htmlText.match(/(?:window\.__zip\s*=\s*|var\s+__zip\s*=\s*)(["'][\s\S]+?["']|\[[\s\S]+?\]);/);
             if (!zipMatch) return null;
 
-            log("Detected Cocos Engine base64 __zip archive inside HTML. Unpacking assets...");
+            // If HTML already includes JSZip runtime loader that unpacks window.__zip at boot:
+            // Do NOT inject window.__res! That would double the file size from ~3.4MB to ~8.5MB.
+            const hasRuntimeZipLoader = /JSZip/i.test(htmlText);
+            if (hasRuntimeZipLoader) {
+                log("Detected Cocos Engine with embedded __zip archive and JSZip runtime loader. Keeping native __zip (zero duplication).");
+                return htmlText;
+            }
+
+            log("Detected Cocos Engine base64 __zip without JSZip loader. Unpacking assets to window.__res...");
             let base64Data = "";
             try {
                 let rawZip = eval('(' + zipMatch[1] + ')');
@@ -305,7 +373,7 @@
                 });
 
                 await Promise.all(assetPromises);
-                log(`Successfully unpacked ${Object.keys(resMap).length} Cocos assets from base64 __zip array.`);
+                log(`Successfully unpacked ${Object.keys(resMap).length} Cocos assets into window.__res.`);
 
                 const superEvalPatch = `
 <script>
@@ -316,11 +384,13 @@ window.super_eval = window.super_eval || function(path) {
 };
 ${sEnd}`;
 
-                // Bulletproof Head Injection for Cocos
-                if (/<head[^>]*>/i.test(htmlText)) {
-                    return htmlText.replace(/(<\/head>)/i, superEvalPatch + "\n$1");
+                // Since assets are unpacked to window.__res, clear the huge window.__zip string so it's not stored twice!
+                let patchedHtml = htmlText.replace(zipMatch[0], 'window.__zip = "";');
+
+                if (/<head[^>]*>/i.test(patchedHtml)) {
+                    return patchedHtml.replace(/(<\/head>)/i, superEvalPatch + "\n$1");
                 } else {
-                    return superEvalPatch + htmlText;
+                    return superEvalPatch + patchedHtml;
                 }
             } catch (err) {
                 log(`Error extracting Cocos Base64 payload: ${err.message}`);
@@ -539,6 +609,570 @@ ${sEnd}
             return finalZip;
         }
 
+        // =========================================================================
+        // INTELLIGENT ASSET COMPRESSOR SUBSYSTEM (< 5MB GOOGLE ADS COMPLIANCE)
+        // =========================================================================
+
+        function compressImageViaCanvas(img, options) {
+            const maxDim = options.maxDim || 1024;
+            const scale = options.scale || 1.0;
+            const jpegQuality = options.jpegQuality || 0.78;
+            const allowJpeg = options.allowJpeg !== false;
+
+            let w = img.naturalWidth || img.width;
+            let h = img.naturalHeight || img.height;
+            if (!w || !h) return null;
+
+            let targetW = Math.round(w * scale);
+            let targetH = Math.round(h * scale);
+
+            if (targetW > maxDim || targetH > maxDim) {
+                const ratio = Math.min(maxDim / targetW, maxDim / targetH);
+                targetW = Math.round(targetW * ratio);
+                targetH = Math.round(targetH * ratio);
+            }
+
+            targetW = Math.max(1, targetW);
+            targetH = Math.max(1, targetH);
+
+            const canvas = document.createElement('canvas');
+            canvas.width = targetW;
+            canvas.height = targetH;
+            const ctx = canvas.getContext('2d');
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
+            ctx.drawImage(img, 0, 0, targetW, targetH);
+
+            let isOpaque = false;
+            if (allowJpeg) {
+                try {
+                    const imgData = ctx.getImageData(0, 0, targetW, targetH).data;
+                    let hasAlpha = false;
+                    const len = imgData.length;
+                    for (let i = 3; i < len; i += 4) {
+                        if (imgData[i] < 248) {
+                            hasAlpha = true;
+                            break;
+                        }
+                    }
+                    isOpaque = !hasAlpha;
+                } catch (e) {
+                    isOpaque = false;
+                }
+            }
+
+            let outDataUrl;
+            if (isOpaque) {
+                outDataUrl = canvas.toDataURL('image/jpeg', jpegQuality);
+            } else {
+                outDataUrl = canvas.toDataURL('image/png');
+            }
+
+            return {
+                dataUrl: outDataUrl,
+                canvas: canvas,
+                isOpaque: isOpaque,
+                width: targetW,
+                height: targetH
+            };
+        }
+
+        function compressDataUriAsync(dataUri, options) {
+            return new Promise((resolve) => {
+                const cleanUri = dataUri.replace(/[\r\n\s]/g, '');
+                const img = new Image();
+                img.crossOrigin = "anonymous";
+                img.onload = () => {
+                    try {
+                        const res = compressImageViaCanvas(img, options);
+                        if (res && res.dataUrl && res.dataUrl.length < dataUri.length) {
+                            resolve(res.dataUrl);
+                        } else {
+                            resolve(dataUri);
+                        }
+                    } catch(e) {
+                        resolve(dataUri);
+                    }
+                };
+                img.onerror = () => resolve(dataUri);
+                img.src = cleanUri;
+            });
+        }
+
+        function downsampleWav(bytes) {
+            if (bytes.length < 44) return bytes;
+            const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+            if (view.getUint32(0, false) !== 0x52494646 || view.getUint32(8, false) !== 0x57415645) {
+                return bytes;
+            }
+            let offset = 12;
+            let fmtOffset = -1;
+            let dataOffset = -1;
+            let dataSize = 0;
+            while (offset < bytes.length - 8) {
+                const chunkId = view.getUint32(offset, false);
+                const chunkSize = view.getUint32(offset + 4, true);
+                if (chunkId === 0x666d7420) {
+                    fmtOffset = offset + 8;
+                } else if (chunkId === 0x64617461) {
+                    dataOffset = offset + 8;
+                    dataSize = chunkSize;
+                    break;
+                }
+                offset += 8 + chunkSize;
+            }
+            if (fmtOffset === -1 || dataOffset === -1) return bytes;
+
+            const audioFormat = view.getUint16(fmtOffset, true);
+            const numChannels = view.getUint16(fmtOffset + 2, true);
+            const sampleRate = view.getUint32(fmtOffset + 4, true);
+            const bitsPerSample = view.getUint16(fmtOffset + 14, true);
+
+            if (audioFormat !== 1 || bitsPerSample !== 16 || (numChannels === 1 && sampleRate <= 22050)) {
+                return bytes;
+            }
+
+            const downsampleFactor = sampleRate > 32000 ? 2 : 1;
+            const newSampleRate = Math.round(sampleRate / downsampleFactor);
+            const totalSamples = Math.floor(dataSize / (2 * numChannels));
+            const newTotalSamples = Math.floor(totalSamples / downsampleFactor);
+            const newDataSize = newTotalSamples * 2;
+
+            const outBuffer = new ArrayBuffer(44 + newDataSize);
+            const outView = new DataView(outBuffer);
+
+            outView.setUint32(0, 0x52494646, false); // RIFF
+            outView.setUint32(4, 36 + newDataSize, true);
+            outView.setUint32(8, 0x57415645, false); // WAVE
+            outView.setUint32(12, 0x666d7420, false); // fmt 
+            outView.setUint32(16, 16, true);
+            outView.setUint16(20, 1, true);
+            outView.setUint16(22, 1, true); // Mono
+            outView.setUint32(24, newSampleRate, true);
+            outView.setUint32(28, newSampleRate * 2, true);
+            outView.setUint16(32, 2, true);
+            outView.setUint16(34, 16, true);
+            outView.setUint32(36, 0x64617461, false); // data
+            outView.setUint32(40, newDataSize, true);
+
+            let outIdx = 44;
+            for (let i = 0; i < totalSamples; i += downsampleFactor) {
+                const inSampleOffset = dataOffset + i * numChannels * 2;
+                if (inSampleOffset + numChannels * 2 > bytes.length) break;
+                let sample = 0;
+                if (numChannels === 2) {
+                    const left = view.getInt16(inSampleOffset, true);
+                    const right = view.getInt16(inSampleOffset + 2, true);
+                    sample = Math.round((left + right) / 2);
+                } else {
+                    sample = view.getInt16(inSampleOffset, true);
+                }
+                outView.setInt16(outIdx, sample, true);
+                outIdx += 2;
+            }
+
+            return new Uint8Array(outBuffer);
+        }
+
+        async function compressHtmlString(html, options) {
+            // Match data URIs for PNG, JPG, JPEG, WEBP longer than 2000 chars
+            const regex = /data:image\/(?:png|jpeg|jpg|webp);base64,[A-Za-z0-9+/=\r\n]{2000,}/gi;
+            const matches = html.match(regex);
+            let totalSaved = 0;
+            let newHtml = html;
+
+            if (matches && matches.length > 0) {
+                const uniqueUris = Array.from(new Set(matches));
+                log(`[Compressor] Optimizing ${uniqueUris.length} image textures (MaxDim: ${options.maxDim}px, Quality: ${Math.round(options.jpegQuality * 100)}%)...`);
+
+                for (let i = 0; i < uniqueUris.length; i++) {
+                    const origUri = uniqueUris[i];
+                    const compressedUri = await compressDataUriAsync(origUri, options);
+                    if (compressedUri && compressedUri.length < origUri.length) {
+                        const saved = origUri.length - compressedUri.length;
+                        totalSaved += saved;
+                        newHtml = newHtml.split(origUri).join(compressedUri);
+                        const clean = origUri.replace(/[\r\n\s]/g, '');
+                        if (clean !== origUri) {
+                            newHtml = newHtml.split(clean).join(compressedUri);
+                        }
+                    }
+                }
+                log(`[Compressor] Image texture optimization saved: ${(totalSaved / 1024).toFixed(1)} KB in base64 data.`);
+            }
+
+            // Audio track downsampling if requested
+            if (options.downsampleAudio) {
+                const wavRegex = /data:audio\/wav;base64,[A-Za-z0-9+/=\r\n]{30000,}/gi;
+                const wavMatches = Array.from(new Set(newHtml.match(wavRegex) || []));
+                if (wavMatches.length > 0) {
+                    log(`[Compressor] Found ${wavMatches.length} large WAV audio track(s). Downsampling to 22.05kHz mono...`);
+                    for (let origWavUri of wavMatches) {
+                        try {
+                            const cleanWav = origWavUri.replace(/[\r\n\s]/g, '');
+                            const b64Part = cleanWav.split(',')[1];
+                            const wavBytes = base64ToUint8Array(b64Part);
+                            const downsampled = downsampleWav(wavBytes);
+                            if (downsampled.length < wavBytes.length) {
+                                const newB64 = uint8ArrayToBase64(downsampled);
+                                const newWavUri = `data:audio/wav;base64,${newB64}`;
+                                newHtml = newHtml.split(origWavUri).join(newWavUri);
+                                log(`[Compressor] Downsampled WAV: ${(wavBytes.length/1024).toFixed(0)} KB -> ${(downsampled.length/1024).toFixed(0)} KB.`);
+                            }
+                        } catch(e) {
+                            log(`[Compressor] Audio optimization note: ${e.message}`);
+                        }
+                    }
+                }
+            }
+
+            // Check if ad contains embedded Cocos __zip archive and compress textures inside it!
+            const zipMatch = newHtml.match(/(?:window\.__zip\s*=\s*|var\s+__zip\s*=\s*)(["'][\s\S]+?["']|\[[\s\S]+?\]);/);
+            if (zipMatch) {
+                newHtml = await compressCocosZipPayload(newHtml, zipMatch, options);
+            }
+
+            return newHtml;
+        }
+
+        async function compressCocosZipPayload(html, zipMatch, options) {
+            log("[Compressor] Inspecting Cocos embedded __zip archive for asset compression...");
+            let rawZip;
+            try {
+                rawZip = eval('(' + zipMatch[1] + ')');
+            } catch(e) {
+                return html;
+            }
+            const b64 = Array.isArray(rawZip) ? rawZip.join('') : rawZip;
+            if (!b64 || b64.length < 50000) return html;
+
+            try {
+                const zipBytes = base64ToUint8Array(b64);
+                const zip = await JSZip.loadAsync(zipBytes);
+                let compressedCount = 0;
+                const filesToCompress = [];
+
+                zip.forEach((path, file) => {
+                    if (!file.dir && !path.includes('__MACOSX') && !path.startsWith('.')) {
+                        const lower = path.toLowerCase();
+                        if (lower.endsWith('.png') || lower.endsWith('.jpg') || lower.endsWith('.jpeg') || lower.endsWith('.webp')) {
+                            filesToCompress.push(path);
+                        }
+                    }
+                });
+
+                if (filesToCompress.length > 0) {
+                    log(`[Compressor] Found ${filesToCompress.length} textures inside Cocos __zip archive. Optimizing...`);
+                    for (let path of filesToCompress) {
+                        try {
+                            const fileObj = zip.file(path);
+                            if (!fileObj) continue;
+                            const fileData = await fileObj.async('uint8array');
+                            if (fileData.length < 2500) continue;
+
+                            // Check if file is stored as a data URI string
+                            let isTextDataUri = false;
+                            let textData = '';
+                            if (fileData[0] === 100 && fileData[1] === 97 && fileData[2] === 116 && fileData[3] === 97) {
+                                textData = new TextDecoder().decode(fileData);
+                                if (textData.startsWith('data:image/')) {
+                                    isTextDataUri = true;
+                                }
+                            }
+
+                            if (isTextDataUri) {
+                                const newUri = await compressDataUriAsync(textData, options);
+                                if (newUri && newUri.length < textData.length) {
+                                    zip.file(path, new TextEncoder().encode(newUri));
+                                    compressedCount++;
+                                }
+                            } else {
+                                const newBytes = await compressZipImageFile(fileData, path, options);
+                                if (newBytes && newBytes.length < fileData.length) {
+                                    zip.file(path, newBytes);
+                                    compressedCount++;
+                                }
+                            }
+                        } catch(e) {
+                            console.warn(e);
+                        }
+                    }
+                    log(`[Compressor] Successfully optimized ${compressedCount} textures inside Cocos __zip archive.`);
+
+                    const newZipBase64 = await zip.generateAsync({
+                        type: 'base64',
+                        compression: 'DEFLATE',
+                        compressionOptions: { level: 9 }
+                    });
+
+                    log(`[Compressor] Repacked Cocos __zip (base64 size: ${(b64.length/1024).toFixed(1)} KB -> ${(newZipBase64.length/1024).toFixed(1)} KB).`);
+                    return html.replace(zipMatch[1], `"${newZipBase64}"`);
+                }
+            } catch(err) {
+                log(`[Compressor] Note on Cocos __zip processing: ${err.message}`);
+            }
+            return html;
+        }
+
+        function compressZipImageFile(uint8data, filename, options) {
+            const isPng = filename.toLowerCase().endsWith('.png');
+            const isJpg = filename.toLowerCase().endsWith('.jpg') || filename.toLowerCase().endsWith('.jpeg');
+            const isWebp = filename.toLowerCase().endsWith('.webp');
+            if (!isPng && !isJpg && !isWebp) return Promise.resolve(uint8data);
+
+            return new Promise((resolve) => {
+                let mime = 'image/png';
+                if (isJpg) mime = 'image/jpeg';
+                if (isWebp) mime = 'image/webp';
+
+                const blob = new Blob([uint8data], { type: mime });
+                const url = URL.createObjectURL(blob);
+                const img = new Image();
+
+                img.onload = () => {
+                    URL.revokeObjectURL(url);
+                    try {
+                        let w = img.naturalWidth || img.width;
+                        let h = img.naturalHeight || img.height;
+                        if (!w || !h) return resolve(uint8data);
+
+                        let targetW = Math.round(w * (options.scale || 1.0));
+                        let targetH = Math.round(h * (options.scale || 1.0));
+
+                        const maxDim = options.maxDim || 1024;
+                        if (targetW > maxDim || targetH > maxDim) {
+                            const ratio = Math.min(maxDim / targetW, maxDim / targetH);
+                            targetW = Math.round(targetW * ratio);
+                            targetH = Math.round(targetH * ratio);
+                        }
+
+                        targetW = Math.max(1, targetW);
+                        targetH = Math.max(1, targetH);
+
+                        const canvas = document.createElement('canvas');
+                        canvas.width = targetW;
+                        canvas.height = targetH;
+                        const ctx = canvas.getContext('2d');
+                        ctx.imageSmoothingEnabled = true;
+                        ctx.imageSmoothingQuality = 'high';
+                        ctx.drawImage(img, 0, 0, targetW, targetH);
+
+                        const outMime = mime;
+                        const quality = isPng ? undefined : (options.jpegQuality || 0.75);
+
+                        canvas.toBlob((blobResult) => {
+                            if (!blobResult) return resolve(uint8data);
+                            blobResult.arrayBuffer().then(buf => {
+                                const newBytes = new Uint8Array(buf);
+                                if (newBytes.length < uint8data.length) {
+                                    resolve(newBytes);
+                                } else {
+                                    resolve(uint8data);
+                                }
+                            });
+                        }, outMime, quality);
+                    } catch(e) {
+                        resolve(uint8data);
+                    }
+                };
+
+                img.onerror = () => {
+                    URL.revokeObjectURL(url);
+                    resolve(uint8data);
+                };
+
+                img.src = url;
+            });
+        }
+
+        async function compressZipFiles(zip, options) {
+            const filesToCompress = [];
+            zip.forEach((relativePath, file) => {
+                if (!file.dir && !relativePath.includes('__MACOSX') && !relativePath.startsWith('.')) {
+                    const lower = relativePath.toLowerCase();
+                    if (lower.endsWith('.png') || lower.endsWith('.jpg') || lower.endsWith('.jpeg') || lower.endsWith('.webp')) {
+                        filesToCompress.push(relativePath);
+                    }
+                }
+            });
+
+            if (filesToCompress.length > 0) {
+                log(`[Compressor] Optimizing ${filesToCompress.length} standalone image files in ZIP archive...`);
+                for (let path of filesToCompress) {
+                    try {
+                        const origBytes = await zip.file(path).async('uint8array');
+                        if (origBytes.length < 5000) continue;
+
+                        const compressedBytes = await compressZipImageFile(origBytes, path, options);
+                        if (compressedBytes && compressedBytes.length < origBytes.length) {
+                            zip.file(path, compressedBytes);
+                            log(`[Compressor] Compressed ${path}: ${(origBytes.length/1024).toFixed(0)} KB -> ${(compressedBytes.length/1024).toFixed(0)} KB`);
+                        }
+                    } catch(e) {
+                        console.warn(e);
+                    }
+                }
+            }
+
+            const htmlFile = zip.file('index.html');
+            if (htmlFile) {
+                let htmlStr = await htmlFile.async('string');
+                const compressedHtml = await compressHtmlString(htmlStr, options);
+                if (compressedHtml.length < htmlStr.length) {
+                    zip.file('index.html', compressedHtml);
+                }
+            }
+
+            return zip;
+        }
+
+        async function executeAdaptiveCompression() {
+            if (!currentPackageZip) return;
+
+            const compressBtn = document.getElementById('compress-btn');
+            const compressBtnText = document.getElementById('compress-btn-text');
+            const spinner = document.getElementById('compress-spinner');
+            
+            compressBtn.disabled = true;
+            spinner.classList.remove('hidden');
+            compressBtnText.textContent = "Compressing Assets... (Target < 5MB)";
+
+            log("==========================================");
+            log("⚡ INITIATING ADAPTIVE ASSET COMPRESSOR");
+            log("Target: < 4.85 MB (Google Ads 5MB Compliance)");
+            log("==========================================");
+
+            const passes = [
+                { name: "Pass 1 (High Quality)", maxDim: 1024, scale: 0.90, jpegQuality: 0.80, allowJpeg: true, downsampleAudio: false },
+                { name: "Pass 2 (Balanced)", maxDim: 768, scale: 0.75, jpegQuality: 0.72, allowJpeg: true, downsampleAudio: true },
+                { name: "Pass 3 (Aggressive)", maxDim: 512, scale: 0.60, jpegQuality: 0.62, allowJpeg: true, downsampleAudio: true },
+                { name: "Pass 4 (Ultra)", maxDim: 384, scale: 0.50, jpegQuality: 0.50, allowJpeg: true, downsampleAudio: true }
+            ];
+
+            let workingZip = currentPackageZip;
+            let workingHtml = currentHtmlContent;
+            let finalUint8 = null;
+            let currentBytes = 0;
+            let originalBytes = currentZipBlob ? currentZipBlob.size : 0;
+
+            for (let p = 0; p < passes.length; p++) {
+                const pass = passes[p];
+                log(`Running ${pass.name}...`);
+
+                if (isCurrentZipUpload) {
+                    workingZip = await compressZipFiles(workingZip, pass);
+                    const hFile = workingZip.file('index.html');
+                    if (hFile) workingHtml = await hFile.async('string');
+                } else {
+                    workingHtml = await compressHtmlString(workingHtml, pass);
+                    workingZip = new JSZip();
+                    workingZip.file('index.html', workingHtml);
+                }
+
+                finalUint8 = await workingZip.generateAsync({
+                    type: 'uint8array',
+                    compression: 'DEFLATE',
+                    compressionOptions: { level: 9 }
+                });
+
+                currentBytes = finalUint8.length;
+                const currentKb = (currentBytes / 1024).toFixed(2);
+                const currentMb = (currentBytes / (1024 * 1024)).toFixed(2);
+                log(`Package size after ${pass.name}: ${currentKb} KB (${currentMb} MB)`);
+
+                if (currentBytes <= TARGET_SAFE_BYTES) {
+                    log(`✅ SUCCESS: Package size is now safely under 5 MB Google Ads limit!`);
+                    break;
+                } else {
+                    if (p < passes.length - 1) {
+                        log(`Size (${currentMb} MB) still exceeds target limit. Advancing to next pass...`);
+                    } else {
+                        log(`Max compression reached. Final size: ${currentMb} MB`);
+                    }
+                }
+            }
+
+            // Update global state with compressed results
+            currentPackageZip = workingZip;
+            currentHtmlContent = workingHtml;
+            currentZipBlob = new Blob([finalUint8], { type: 'application/zip' });
+            currentZipUrl = URL.createObjectURL(currentZipBlob);
+
+            // Update Ad Preview with the compressed HTML
+            const previewBlob = new Blob([workingHtml], { type: 'text/html' });
+            document.getElementById('preview-frame').src = URL.createObjectURL(previewBlob);
+
+            // Update UI elements
+            const newKb = (currentBytes / 1024).toFixed(2);
+            const newMb = (currentBytes / (1024 * 1024)).toFixed(2);
+            const origMb = (originalBytes / (1024 * 1024)).toFixed(2);
+            const savingsPercent = originalBytes > 0 ? (((originalBytes - currentBytes) / originalBytes) * 100).toFixed(1) : 0;
+
+            const statusCard = document.getElementById('status-card');
+            const statusText = document.getElementById('status-text');
+            const sizeText = document.getElementById('size-text');
+            const packageSize = document.getElementById('package-size');
+            const successBanner = document.getElementById('compress-success-banner');
+            const successTitle = document.getElementById('compress-success-title');
+            const successDetail = document.getElementById('compress-success-detail');
+            const dlBtn = document.getElementById('download-btn');
+
+            if (currentBytes <= GOOGLE_ADS_MAX_BYTES) {
+                // SUCCESSFULLY UNDER 5MB
+                statusCard.className = "mt-6 p-4 rounded-xl bg-emerald-50 text-emerald-700 font-medium text-center border border-emerald-200";
+                statusText.innerHTML = `Status: <strong>PASS (COMPRESSED)</strong> | AdNxs Strings: <strong>Deeply Purged</strong>`;
+                sizeText.className = "block text-xs mt-1 text-emerald-600 font-semibold";
+                packageSize.textContent = `${newKb} KB (${newMb} MB) - Google Ads Compliant!`;
+
+                document.getElementById('oversize-warning').classList.add('hidden');
+
+                successBanner.className = "mt-4 p-4 rounded-xl bg-emerald-50 text-emerald-800 font-medium text-xs border border-emerald-300";
+                successTitle.textContent = "Intelligent Compression Completed (< 5MB)";
+                successDetail.textContent = `Reduced from ${origMb} MB to ${newMb} MB (-${savingsPercent}%). File is now compliant with Google Ads 5MB limit.`;
+                successBanner.classList.remove('hidden');
+
+                dlBtn.href = currentZipUrl;
+                dlBtn.download = 'Google_Ads_Ready_Compressed.zip';
+                dlBtn.className = "mt-4 block text-center w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-6 rounded-xl shadow-lg transition duration-200 cursor-pointer";
+                dlBtn.textContent = 'Download Google_Ads_Ready_Compressed.zip';
+
+                // Auto-download compressed ZIP
+                const autoDl = document.createElement('a');
+                autoDl.href = currentZipUrl;
+                autoDl.download = 'Google_Ads_Ready_Compressed.zip';
+                document.body.appendChild(autoDl);
+                autoDl.click();
+                document.body.removeChild(autoDl);
+
+                log(`Automatically downloaded Google_Ads_Ready_Compressed.zip (${newKb} KB)!`);
+            } else {
+                // STILL OVERSIZED (User notified clearly)
+                statusCard.className = "mt-6 p-4 rounded-xl bg-amber-50 text-amber-800 font-medium text-center border border-amber-300";
+                statusText.innerHTML = `Status: <strong class="text-amber-700">COMPRESSED BUT STILL OVERSIZED</strong> | AdNxs Strings: <strong>Deeply Purged</strong>`;
+                sizeText.className = "block text-xs mt-1 text-red-600 font-bold";
+                packageSize.textContent = `${newKb} KB (${newMb} MB - Still exceeds 5MB)`;
+
+                successBanner.className = "mt-4 p-4 rounded-xl bg-amber-50 text-amber-800 font-medium text-xs border border-amber-300";
+                successTitle.textContent = "Compression Applied";
+                successDetail.textContent = `Reduced from ${origMb} MB to ${newMb} MB (-${savingsPercent}%). File still exceeds 5MB.`;
+                successBanner.classList.remove('hidden');
+
+                dlBtn.href = currentZipUrl;
+                dlBtn.download = 'Google_Ads_Ready_Compressed.zip';
+            }
+
+            compressBtn.disabled = false;
+            spinner.classList.add('hidden');
+            compressBtnText.textContent = "⚡ Compress Again / Downloaded";
+        }
+
+        document.getElementById('compress-btn').addEventListener('click', executeAdaptiveCompression);
+        document.getElementById('compress-optional-btn').addEventListener('click', executeAdaptiveCompression);
+
+        // =========================================================================
+        // MAIN CONVERSION HANDLER
+        // =========================================================================
+
         document.getElementById('convert-btn').addEventListener('click', async () => {
             if (!uploadedFile) {
                 alert("Please upload an ad file first!");
@@ -551,12 +1185,16 @@ ${sEnd}
             btn.disabled = true;
             document.getElementById('log-box').classList.remove('hidden');
             document.getElementById('log-box').innerHTML = '<div class="font-bold text-slate-400 mb-1">--- Live Processing Logs ---</div>';
+            document.getElementById('compress-success-banner').classList.add('hidden');
+            document.getElementById('oversize-warning').classList.add('hidden');
+            document.getElementById('compress-optional-btn').classList.add('hidden');
 
             try {
                 let finalZip = new JSZip();
                 let htmlText = "";
+                isCurrentZipUpload = uploadedFile.name.toLowerCase().endsWith('.zip');
 
-                if (uploadedFile.name.toLowerCase().endsWith('.zip')) {
+                if (isCurrentZipUpload) {
                     log("Processing multi-file ZIP archive...");
                     const zipBuffer = await uploadedFile.arrayBuffer();
                     finalZip = await processZipArchive(zipBuffer, appLink);
@@ -628,7 +1266,6 @@ ${sEnd}
                     } else {
                         warningBox.classList.add('hidden');
                     }
-                    // -------------------------------
 
                     log("Applying Google Ads ExitApi, MRAID & Network Protection...");
                     htmlText = convertApplovinExit(htmlText, appLink);
@@ -644,18 +1281,66 @@ ${sEnd}
                 const content = new Blob([contentUint8], { type: 'application/zip' });
                 const zipUrl = URL.createObjectURL(content);
 
+                // Save global state for compressor
+                currentPackageZip = finalZip;
+                currentHtmlContent = htmlText;
+                currentZipBlob = content;
+                currentZipUrl = zipUrl;
+
                 const previewBlob = new Blob([htmlText], { type: 'text/html' });
                 const previewUrl = URL.createObjectURL(previewBlob);
                 document.getElementById('preview-frame').src = previewUrl;
 
-                document.getElementById('package-size').textContent = `${(content.size / 1024).toFixed(2)} KB`;
+                const packageSizeSpan = document.getElementById('package-size');
+                const statusCard = document.getElementById('status-card');
+                const statusText = document.getElementById('status-text');
+                const sizeText = document.getElementById('size-text');
+                const dlBtn = document.getElementById('download-btn');
+                const oversizeWarning = document.getElementById('oversize-warning');
+                const oversizeDetail = document.getElementById('oversize-detail');
+                const compressOptionalBtn = document.getElementById('compress-optional-btn');
+
+                const sizeBytes = content.size;
+                const sizeKb = (sizeBytes / 1024).toFixed(2);
+                const sizeMb = (sizeBytes / (1024 * 1024)).toFixed(2);
+
                 document.getElementById('results-section').classList.remove('hidden');
 
-                const dlBtn = document.getElementById('download-btn');
-                dlBtn.href = zipUrl;
-                dlBtn.download = 'Google_Ads_Ready.zip';
+                if (sizeBytes > GOOGLE_ADS_MAX_BYTES) {
+                    // EXCEEDS 5MB LIMIT
+                    statusCard.className = "mt-6 p-4 rounded-xl bg-amber-50 text-amber-800 font-medium text-center border border-amber-300";
+                    statusText.innerHTML = `Status: <strong class="text-amber-700">OVERSIZED (&gt; 5MB)</strong> | AdNxs Strings: <strong>Deeply Purged</strong>`;
+                    sizeText.className = "block text-xs mt-1 text-red-600 font-bold";
+                    packageSizeSpan.textContent = `${sizeKb} KB (${sizeMb} MB - Exceeds Google Ads 5MB Limit!)`;
 
-                log('Google Ads ZIP package created successfully!');
+                    oversizeDetail.textContent = `${sizeMb} MB (${sizeKb} KB)`;
+                    oversizeWarning.classList.remove('hidden');
+                    compressOptionalBtn.classList.add('hidden');
+
+                    dlBtn.href = zipUrl;
+                    dlBtn.download = 'Google_Ads_Ready_Uncompressed.zip';
+                    dlBtn.textContent = 'Download Uncompressed (> 5MB - Google Ads Rejects)';
+                    dlBtn.className = "mt-4 block text-center w-full bg-slate-500 hover:bg-slate-600 text-white font-bold py-3 px-6 rounded-xl shadow-lg transition duration-200 cursor-pointer";
+
+                    log(`⚠️ PACKAGE EXCEEDS GOOGLE ADS 5MB LIMIT (${sizeMb} MB). Click 'Compress Ad to < 5MB' to optimize!`);
+                } else {
+                    // COMPLIANT (< 5MB)
+                    statusCard.className = "mt-6 p-4 rounded-xl bg-emerald-50 text-emerald-700 font-medium text-center border border-emerald-200";
+                    statusText.innerHTML = `Status: <strong>PASS</strong> | AdNxs Strings: <strong>Deeply Purged</strong>`;
+                    sizeText.className = "block text-xs mt-1 text-emerald-600 font-semibold";
+                    packageSizeSpan.textContent = `${sizeKb} KB (< 5MB - Google Ads Compliant)`;
+
+                    oversizeWarning.classList.add('hidden');
+                    compressOptionalBtn.classList.remove('hidden');
+
+                    dlBtn.href = zipUrl;
+                    dlBtn.download = 'Google_Ads_Ready.zip';
+                    dlBtn.textContent = 'Download Google_Ads_Ready.zip';
+                    dlBtn.className = "mt-4 block text-center w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-6 rounded-xl shadow-lg transition duration-200 cursor-pointer";
+
+                    log(`Google Ads ZIP package created successfully! Size: ${sizeKb} KB (< 5MB Compliant)`);
+                }
+
                 btn.textContent = 'Convert & Package';
                 btn.disabled = false;
             } catch (err) {
